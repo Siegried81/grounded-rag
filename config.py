@@ -1,0 +1,97 @@
+"""Central configuration: all tunables and provider settings in one place.
+
+Values are read from the environment (via a .env file) with sensible defaults so
+the project runs out of the box with local Ollama. Keeping every knob here — chunk
+sizes, the retrieval threshold, provider endpoints — means no module hardcodes a
+magic number, and the one setting that changes what an answer means (the relevance
+threshold below which the assistant refuses) is visible and documented.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# --- Paths -------------------------------------------------------------------
+ROOT = Path(__file__).resolve().parent
+DATA_DIR = ROOT / "data"       # one subfolder per corpus, e.g. data/ai_act
+INDEX_DIR = ROOT / "index"     # persisted vector stores, one subfolder per corpus
+
+# --- Chunking ----------------------------------------------------------------
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "900"))        # characters per passage
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))  # characters shared between neighbours
+
+# --- Retrieval ---------------------------------------------------------------
+TOP_K = int(os.getenv("TOP_K", "5"))
+# Minimum cosine similarity for a passage to count as evidence. Below this for
+# every candidate, the assistant refuses rather than answering ungrounded. This
+# gate is always applied to the DENSE cosine score, so it keeps the same meaning
+# whether retrieval runs in dense or hybrid mode.
+SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "0.35"))
+# "hybrid" fuses dense (cosine) and BM25 (keyword) rankings; "dense" uses vectors
+# only. Hybrid catches exact terms (identifiers, acronyms) that embeddings miss.
+RETRIEVAL_MODE = os.getenv("RETRIEVAL_MODE", "hybrid")  # hybrid | dense
+# Size of the candidate pool pulled from each channel before fusion/MMR/top-k.
+CANDIDATE_K = int(os.getenv("CANDIDATE_K", "20"))
+# Maximal Marginal Relevance reorders the final set to drop near-duplicate
+# passages; lambda 1.0 is pure relevance, 0.0 pure diversity.
+USE_MMR = os.getenv("USE_MMR", "true").lower() == "true"
+MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.6"))
+
+# --- Chunking / ingestion ----------------------------------------------------
+# "smart" packs whole sentences (better passages & citations); "char" is the
+# original fixed-character splitter, kept as a fallback.
+CHUNKER = os.getenv("CHUNKER", "smart")  # smart | char
+USE_EMBED_CACHE = os.getenv("USE_EMBED_CACHE", "true").lower() == "true"
+
+# --- Verification & logging --------------------------------------------------
+# Minimum lexical grounding for an answer to pass the (cheap, offline) faithfulness
+# check. It is a proxy, not entailment, so the bar is deliberately modest.
+VERIFY_MIN_GROUNDING = float(os.getenv("VERIFY_MIN_GROUNDING", "0.30"))
+QUERY_LOG_PATH = ROOT / "logs" / "queries.jsonl"
+
+# --- Embedding backend -------------------------------------------------------
+EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "ollama")  # ollama | hosted | fake
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
+OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
+HOSTED_EMBED_BASE_URL = os.getenv("HOSTED_EMBED_BASE_URL", "")
+HOSTED_EMBED_MODEL = os.getenv("HOSTED_EMBED_MODEL", "")
+HOSTED_EMBED_API_KEY = os.getenv("HOSTED_EMBED_API_KEY", "")
+
+# --- Generation backend ------------------------------------------------------
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")  # groq | openrouter | ollama
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.2:3b")
+
+# Ordered fallback chain used by rag/llm.py. First provider is the configured one.
+LLM_FALLBACK_ORDER = [
+    p for p in [LLM_PROVIDER, "groq", "openrouter", "ollama"]
+    if p and p not in ("",)
+]
+
+
+def corpus_dir(corpus: str) -> Path:
+    """Folder holding the raw documents for a corpus (e.g. data/ai_act)."""
+    return DATA_DIR / corpus
+
+
+def index_path(corpus: str) -> Path:
+    """Folder where the built vector store for a corpus is persisted."""
+    return INDEX_DIR / corpus
+
+
+def bm25_path(corpus: str) -> Path:
+    """File holding the BM25 keyword index for a corpus, next to its vectors."""
+    return index_path(corpus) / "bm25.json"
+
+
+def embed_cache_path(corpus: str) -> Path:
+    """File holding the embedding cache for a corpus, next to its index."""
+    return index_path(corpus) / "embed_cache.json"
