@@ -12,3 +12,12 @@
 {"question": "Qu'impose l'Article 50 à un outil qui génère du contenu visible par l'utilisateur ?", "relevant_sources": ["04_practical_obligations.txt"]}
 {"question": "Quelles sont les obligations d'un déployeur qui construit sur un modèle GPAI via API ?", "relevant_sources": ["04_practical_obligations.txt"]}
 {"question": "En quoi consiste l'obligation de littératie IA pour les employés ?", "relevant_sources": ["04_practical_obligations.txt"]}
+{"question": "Quel est le numéro officiel du règlement de l'AI Act ?", "relevant_sources": ["01_overview_and_risk_tiers.txt"]}
+{"question": "Les filtres anti-spam sont-ils soumis à des obligations spécifiques ?", "relevant_sources": ["01_overview_and_risk_tiers.txt"]}
+{"question": "Le scraping massif de visages pour des bases de reconnaissance faciale est-il autorisé ?", "relevant_sources": ["01_overview_and_risk_tiers.txt"]}
+{"question": "Que se passe-t-il le 2 décembre 2026 pour les systèmes déjà sur le marché ?", "relevant_sources": ["02_timeline.txt"]}
+{"question": "Quelle échéance concerne les systèmes IA dans les grands systèmes informatiques de l'Annexe X ?", "relevant_sources": ["02_timeline.txt"]}
+{"question": "Quand tombent les échéances résiduelles pour les systèmes legacy ?", "relevant_sources": ["02_timeline.txt"]}
+{"question": "Quel rôle ont joué les organismes de normalisation européens dans le report ?", "relevant_sources": ["03_digital_omnibus_postponement.txt"]}
+{"question": "L'échéance du 2 août 2026 est-elle totalement annulée ?", "relevant_sources": ["03_digital_omnibus_postponement.txt"]}
+{"question": "Quelles précautions d'architecture (traçabilité, logs, explicabilité) prévoir pour un projet haut risque ?", "relevant_sources": ["04_practical_obligations.txt"]}
