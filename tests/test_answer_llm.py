@@ -31,8 +31,12 @@ OLLAMA_JSON = {"message": {"content": "hello from ollama"}}
 
 @pytest.fixture(autouse=True)
 def keys(monkeypatch):
-    """Give both hosted providers a dummy key so they are attempted by default."""
-    monkeypatch.setattr(config, "GROQ_API_KEY", "g")
+    """Give both hosted providers a dummy key so they are attempted by default.
+
+    GROQ_API_KEYS is set explicitly so the suite stays deterministic even when a
+    real .env with live Groq keys is present (config.py loads it at import).
+    """
+    monkeypatch.setattr(config, "GROQ_API_KEYS", ["g"])
     monkeypatch.setattr(config, "OPENROUTER_API_KEY", "o")
 
 
@@ -71,8 +75,25 @@ def test_fallback_on_failure_and_dedup(monkeypatch):
     assert len(calls) == 2 and "openrouter" in calls[1]
 
 
+def test_groq_rotates_keys_on_failure(monkeypatch):
+    # First key is rate-limited (429-like), rotation must retry with the second.
+    monkeypatch.setattr(config, "GROQ_API_KEYS", ["k1", "k2"])
+    seen = []
+
+    def post(url, **kw):
+        key = kw["headers"]["Authorization"]
+        seen.append(key)
+        if key == "Bearer k1":
+            raise RuntimeError("429 rate limit")
+        return FakeResp(OPENAI_JSON)
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    assert llm.complete("hi", order=["groq"]) == "hello from openai-style"
+    assert seen == ["Bearer k1", "Bearer k2"]  # rotated to the second key
+
+
 def test_skips_provider_without_key(monkeypatch):
-    monkeypatch.setattr(config, "GROQ_API_KEY", "")
+    monkeypatch.setattr(config, "GROQ_API_KEYS", [])
     calls = []
 
     def post(url, **kw):

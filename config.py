@@ -65,6 +65,20 @@ HOSTED_EMBED_API_KEY = os.getenv("HOSTED_EMBED_API_KEY", "")
 # --- Generation backend ------------------------------------------------------
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")  # groq | openrouter | ollama
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+# Up to five Groq keys (GROQ_API_KEY, GROQ_API_KEY_2 .. _5). The client rotates to
+# the next key when one is rate-limited or fails, which multiplies the free-tier
+# quota across keys before falling back to another provider.
+GROQ_API_KEYS = [
+    k
+    for k in (
+        GROQ_API_KEY,
+        os.getenv("GROQ_API_KEY_2", ""),
+        os.getenv("GROQ_API_KEY_3", ""),
+        os.getenv("GROQ_API_KEY_4", ""),
+        os.getenv("GROQ_API_KEY_5", ""),
+    )
+    if k
+]
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
