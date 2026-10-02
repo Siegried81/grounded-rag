@@ -49,7 +49,7 @@ autonomous tool use.
 - **Hybrid retrieval.** Dense embeddings miss exact terms (identifiers, acronyms,
   article numbers); a BM25 keyword channel catches them, and the two rankings are
   merged with Reciprocal Rank Fusion. MMR then drops near-duplicate passages so the
-  top-k is diverse. The refusal gate stays anchored to the dense cosine score, so
+  top-k is diverse, scoring relevance by the fused rank so BM25 keeps its say. The refusal gate stays anchored to the dense cosine score, so
   hybrid mode never lowers the bar for answering. Toggle with `RETRIEVAL_MODE`.
 - **Sentence-aware chunking.** Passages end on sentence boundaries instead of
   mid-word, improving both embedding quality and how a cited quote reads. PDFs are
@@ -107,6 +107,19 @@ python -m streamlit run app.py
 python scripts/run_eval.py --corpus ai_act --eval-file eval/ai_act_eval.jsonl
 ```
 
+The eval runs the app's configured retrieval (`RETRIEVAL_MODE`, hybrid by
+default); add `--mode dense` to measure the dense channel alone. The
+single-document `ai_act` set saturates at recall 1.0, so the discriminating sets
+are the multi-section corpora, where each question is labelled with the one
+section that answers it:
+
+```bash
+python cli.py ingest --corpus ai_act_sections
+python scripts/run_eval.py --corpus ai_act_sections --eval-file eval/ai_act_sections_eval.jsonl --k 3
+python cli.py ingest --corpus filings_sections
+python scripts/run_eval.py --corpus filings_sections --eval-file eval/filings_sections_eval.jsonl --k 3
+```
+
 ## Providers (all free tiers, no provider locked in)
 
 | Role       | Default                            | Fallbacks                          | Set in `.env`    |
@@ -143,7 +156,7 @@ cli.py            ingest / ask
 app.py            Streamlit chat UI
 scripts/run_eval.py   retrieval evaluation
 eval/             labelled question sets
-tests/            81 offline tests (no network, no keys)
+tests/            87 offline tests (no network, no keys)
 docs/             architecture.md · technical_deep_dive.md
 ```
 

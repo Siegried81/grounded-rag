@@ -49,6 +49,8 @@ def retrieve(
     if not dense_pass:
         return []
 
+    # Relevance MMR should diversify: None means dense cosine (dense mode).
+    fused_scores: dict[str, float] | None = None
     if mode == "dense" or bm25 is None:
         ranked = dense_pass
     else:
@@ -63,12 +65,30 @@ def retrieve(
             [[r.chunk.id for r in dense_pass], [r.chunk.id for r in sparse]]
         )
         ranked = [by_id[cid] for cid, _ in fused if cid in by_id]
+        fused_scores = dict(fused)
 
     if use_mmr and len(ranked) > 1 and hasattr(store, "vectors_for_ids"):
         vecs = store.vectors_for_ids([r.chunk.id for r in ranked])
         candidates = [(r.chunk.id, vecs[r.chunk.id]) for r in ranked if r.chunk.id in vecs]
         if candidates:
-            order = mmr(query_vec, candidates, lambda_mult=config.MMR_LAMBDA, top_k=top_k)
+            relevance = None
+            if fused_scores is not None:
+                # In hybrid mode MMR must diversify the fused ranking: scoring
+                # relevance by dense cosine would discard the BM25 contribution.
+                # RRF scores are min-max rescaled to 0..1 to sit on the same
+                # footing as the redundancy (cosine) term. Raw RRF values are
+                # bunched (~0.012-0.033); dividing by the max alone left them
+                # all near 1, so redundancy dominated and relevance was lost.
+                raw = [fused_scores[cid] for cid, _ in candidates]
+                lo, hi = min(raw), max(raw)
+                relevance = [(s - lo) / (hi - lo) if hi > lo else 1.0 for s in raw]
+            order = mmr(
+                query_vec,
+                candidates,
+                lambda_mult=config.MMR_LAMBDA,
+                top_k=top_k,
+                relevance=relevance,
+            )
             by_id = {r.chunk.id: r for r in ranked}
             diversified = [by_id[cid] for cid in order]
             # Append any ranked items MMR could not place (no vector), keeping order.
