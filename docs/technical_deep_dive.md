@@ -53,8 +53,9 @@ files in data/<corpus>/   →  chunk  →  embed (cached)  →  VectorStore (+ s
 
 - **File handling.** `.txt`/`.md` are read as UTF-8; `.pdf` is read **page by
   page** (via `pypdf`) so page numbers survive into `meta["page"]`. `README.md`
-  is skipped (it documents the folder, it is not evidence). Order is sorted by
-  filename for determinism.
+  is skipped (it documents the folder, it is not evidence). Only top-level files
+  are read, so a subfolder (e.g. `data/filings/raw/`, kept as provenance) is left
+  out. Order is sorted by filename for determinism.
 - **Empty corpus → error.** An empty index would make *every* question refuse,
   silently. `ingest_corpus` raises instead.
 
@@ -126,7 +127,8 @@ query
         ranked = fused mapped back to Retrieved
     else:
         ranked = dense_pass
-  → if USE_MMR: ranked = MMR(q, ranked vectors, MMR_LAMBDA)   # diversify
+  → if USE_MMR: ranked = MMR(relevance, ranked vectors, MMR_LAMBDA)   # diversify
+        # relevance = min-max RRF score if fused, else dense cosine
   → return ranked[:TOP_K]
 ```
 
@@ -141,7 +143,11 @@ cosine score remains the single, stable gate.
   by summing `1/(k+rank)`. It uses ranks only, so the two incompatible score scales
   combine without normalisation.
 - **MMR (`fusion.mmr`).** Greedily selects passages maximising
-  `λ·sim(query) − (1−λ)·max sim(already-selected)`, dropping near-duplicates. It is
+  `λ·rel − (1−λ)·max sim(already-selected)`, dropping near-duplicates. In dense
+  mode `rel` is the query cosine. In hybrid mode `rel` is the fused RRF score,
+  min-max rescaled to 0..1: scoring by dense cosine would undo the fusion and
+  leave BM25 with no effect on the final ranking, and raw RRF values are too
+  bunched (~0.012–0.033) to weigh against the cosine redundancy term. It is
   skipped gracefully if the store cannot supply vectors (e.g. a test fake).
 
 Knobs (all in `config.py`): `RETRIEVAL_MODE` (`hybrid`|`dense`), `CANDIDATE_K`,
@@ -154,7 +160,9 @@ Knobs (all in `config.py`): `RETRIEVAL_MODE` (`hybrid`|`dense`), `CANDIDATE_K`,
 - **`llm.complete`** is a provider-agnostic, single-shot chat call. It tries
   providers in priority order (`groq → openrouter → ollama` by default), skips any
   whose API key is missing, falls through on failure, and raises `LLMError` only if
-  all fail. Config is read at call time, so tests can monkeypatch keys. There is no
+  all fail. Groq takes up to five keys (`GROQ_API_KEY`, `_2` … `_5`) and rotates to
+  the next key on failure (typically a free-tier rate limit) before the call falls
+  back to the next provider, so the free quota scales with the number of keys. Config is read at call time, so tests can monkeypatch keys. There is no
   agent loop and no tool use — one structured call per question.
 - **`answer.answer_question`** enforces the contract:
   - empty retrieval → returns `REFUSAL_MESSAGE` **without calling the LLM** (the
@@ -191,9 +199,16 @@ checker — an NLI/LLM-judge pass is named in the roadmap as the stronger versio
 - **`scripts/run_eval.py` + `rag/metrics.py`.** Runs retrieval over a labelled
   question set and reports `recall@k`, `hit_rate@k`, `MRR`. Relevance is judged at
   the **source level**: a retrieved chunk counts if its `source` is in the
-  question's `relevant_sources`. Caveat: the shipped `eval/ai_act_eval.jsonl` has a
-  single-document corpus, so source-level recall is 0/1 per question — it becomes
-  genuinely informative with multi-document corpora (e.g. several filings).
+  question's `relevant_sources`. It loads the BM25 index like the app and runs
+  the configured `RETRIEVAL_MODE`; `--mode dense` isolates the dense channel.
+  Caveat: the shipped `eval/ai_act_eval.jsonl` has a single-document corpus, so
+  source-level recall is 0/1 per question. The discriminating sets are
+  `eval/ai_act_sections_eval.jsonl` (23 questions, 4 sections) and
+  `eval/filings_sections_eval.jsonl` (25 questions, 6 sections of Apple's FY2025
+  10-K), where each question is labelled with the section that answers it.
+  Hybrid retrieval at `k=3`: recall 1.000 / MRR 0.884 on `ai_act_sections`, recall
+  0.900 / MRR 0.840 on `filings_sections`. The sets are small, so one question
+  moves recall by ~0.04; read differences of that size as noise, not signal.
 - **`rag/logging_utils.py`.** Appends one JSON line per query (UTC timestamp,
   corpus, #retrieved, top score, refused). Logging never raises — it must not be
   able to break answering.
@@ -202,7 +217,7 @@ checker — an NLI/LLM-judge pass is named in the roadmap as the stronger versio
 
 ## 9. Testing strategy
 
-81 tests, all offline, enforced by construction:
+87 tests, all offline, enforced by construction:
 
 - the embedder under test is a **deterministic fake** (hash-seeded, L2-normalised);
 - every HTTP call (Ollama/Groq/OpenRouter embeddings and chat) is **monkeypatched**;
@@ -218,8 +233,9 @@ refusal branch makes no LLM call.
 ## 10. Known limitations
 
 - **Lexical grounding only.** No semantic entailment check (see §7).
-- **Single-document sample corpora.** Retrieval metrics need multi-document sets to
-  be fully meaningful (§8).
+- **Small eval sets.** The section corpora make retrieval metrics discriminating,
+  but 23–25 questions each is too few to separate close configurations (§8).
+  Only one filing (Apple FY2025) is covered.
 - **Heuristic sentence splitter.** Over-splits on abbreviations; acceptable for
   chunk boundaries, not a linguistic tokenizer.
 - **Brute-force dense search.** Fine to ~10⁴–10⁵ chunks; beyond that, swap in an
@@ -235,7 +251,8 @@ refusal branch makes no LLM call.
    sharper final ordering than MMR alone.
 2. **LLM/NLI faithfulness check** as an optional, stronger verifier on top of the
    lexical proxy.
-3. **Real-filing eval sets** (multiple 10-Ks) with multi-source relevance labels.
+3. **Larger real-filing eval sets**: several companies' 10-Ks and more
+   questions, so close retrieval configurations can be told apart.
 4. **Answer streaming** in the CLI and Streamlit UI.
 5. **ANN store** (FAISS/pgvector) behind the existing `search` seam for larger
    corpora.

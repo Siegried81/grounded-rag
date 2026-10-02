@@ -48,3 +48,10 @@ def test_mmr_empty_and_zero_vectors():
     assert mmr([1.0, 0.0], []) == []
     out = mmr([0.0, 0.0], [("z", [0.0, 0.0]), ("a", [1.0, 0.0])], top_k=2)
     assert sorted(out) == ["a", "z"]
+
+
+def test_mmr_relevance_overrides_query_cosine():
+    # "a" matches the query vector, but the supplied relevance favours "b".
+    cands = [("a", [1.0, 0.0]), ("b", [0.0, 1.0])]
+    assert mmr([1.0, 0.0], cands, lambda_mult=1.0, top_k=2) == ["a", "b"]
+    assert mmr([1.0, 0.0], cands, lambda_mult=1.0, top_k=2, relevance=[0.0, 1.0]) == ["b", "a"]

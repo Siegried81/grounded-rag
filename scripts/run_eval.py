@@ -3,6 +3,10 @@
 Makes retrieval quality measurable. Relevance is judged at the source level: a
 retrieved chunk is relevant if its `source` is listed in the question's
 `relevant_sources`, because chunk ids are not stable across re-indexing.
+
+The BM25 index is loaded exactly as `cli.py` and `app.py` do, so by default the
+metrics describe the retrieval the app actually runs (`config.RETRIEVAL_MODE`,
+hybrid unless overridden). `--mode dense` measures the dense channel alone.
 """
 
 from __future__ import annotations
@@ -17,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config  # noqa: E402
 from rag.embed import get_embedder  # noqa: E402
+from rag.lexical import BM25Index  # noqa: E402
 from rag.metrics import hit_rate_at_k, mrr, recall_at_k  # noqa: E402
 from rag.retrieve import retrieve  # noqa: E402
 from rag.store import VectorStore  # noqa: E402
@@ -34,9 +39,15 @@ def main() -> None:
     parser.add_argument("--corpus", default="ai_act")
     parser.add_argument("--eval-file", default="eval/ai_act_eval.jsonl")
     parser.add_argument("--k", type=int, default=config.TOP_K)
+    parser.add_argument("--mode", choices=["hybrid", "dense"], default=config.RETRIEVAL_MODE)
     args = parser.parse_args()
 
     store = VectorStore.load(config.index_path(args.corpus))
+    # Same optional-BM25 rule as the app: an older index without it is dense-only.
+    try:
+        bm25 = BM25Index.load(config.bm25_path(args.corpus))
+    except FileNotFoundError:
+        bm25 = None
     embedder = get_embedder()
     items = load_eval(Path(args.eval_file))
 
@@ -44,7 +55,9 @@ def main() -> None:
     hits, recalls, rrs = [], [], []
     for item in items:
         relevant = set(item["relevant_sources"])
-        results = retrieve(item["question"], store, embedder, top_k=args.k)
+        results = retrieve(
+            item["question"], store, embedder, top_k=args.k, bm25=bm25, mode=args.mode
+        )
         # Source-level judgement: rank positions are labelled with the chunk's source.
         sources = [r.chunk.source for r in results]
         h = hit_rate_at_k(sources, relevant, args.k)
@@ -57,7 +70,8 @@ def main() -> None:
 
     n = len(items) or 1
     print("-" * 80)
-    print(f"questions={len(items)} k={args.k}")
+    effective = args.mode if bm25 is not None else "dense"
+    print(f"questions={len(items)} k={args.k} mode={effective}")
     print(
         f"recall@{args.k}={sum(recalls) / n:.3f}  "
         f"hit_rate@{args.k}={sum(hits) / n:.3f}  MRR={sum(rrs) / n:.3f}"
