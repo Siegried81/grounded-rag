@@ -1,7 +1,12 @@
-{"question": "What obligations apply to providers of high-risk AI systems?", "relevant_sources": ["eu_ai_act_primer.txt"]}
-{"question": "Which AI practices are banned under the EU AI Act?", "relevant_sources": ["eu_ai_act_primer.txt"]}
-{"question": "What are the risk tiers defined by the AI Act?", "relevant_sources": ["eu_ai_act_primer.txt"]}
-{"question": "What fines can be imposed for violating the AI Act?", "relevant_sources": ["eu_ai_act_primer.txt"]}
-{"question": "Who falls within the scope of the AI Act?", "relevant_sources": ["eu_ai_act_primer.txt"]}
-{"question": "What transparency requirements apply to limited-risk AI systems such as chatbots?", "relevant_sources": ["eu_ai_act_primer.txt"]}
-{"question": "Is social scoring by public authorities allowed?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "Quels sont les quatre niveaux de risque définis par l'AI Act ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "Quelles pratiques d'IA sont classées à risque inacceptable et interdites ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "La notation sociale par les autorités publiques est-elle autorisée ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "Quelles obligations s'appliquent aux systèmes d'IA à haut risque ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "Quels domaines sont considérés comme à haut risque par l'AI Act ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "Quelles obligations de transparence s'appliquent aux chatbots et aux deepfakes ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "Qu'impose l'Article 50 en matière de transparence ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "Qu'est-ce qu'un modèle d'IA à usage général (GPAI) et quelles règles s'y appliquent ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "À partir de quelle date s'appliquent les obligations pour les systèmes à haut risque de l'Annexe III ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "Pourquoi les obligations haut risque ont-elles été reportées à décembre 2027 ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "En quoi consiste l'obligation de littératie IA pour les employés ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
+{"question": "La reconnaissance des émotions au travail ou à l'école est-elle permise ?", "relevant_sources": ["eu_ai_act_primer.txt"]}
