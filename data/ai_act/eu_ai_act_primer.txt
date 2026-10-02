@@ -1,0 +1,43 @@
+**08/09/2026, 15h (heure de Bruxelles)** — Voici un tour d'horizon complet de l'AI Act européen, à jour avec les derniers changements de 2026.
+
+## Qu'est-ce que c'est
+
+L'AI Act (Règlement (EU) 2024/1689) est le premier cadre législatif complet au monde sur l'intelligence artificielle. Il classe les systèmes IA par **niveau de risque** et impose des obligations proportionnelles.
+
+## Les 4 niveaux de risque
+
+1. **Risque inacceptable** → interdit (ex : notation sociale, manipulation subliminale, reconnaissance d'émotions au travail/école, scraping massif de visages pour bases de reconnaissance faciale)
+2. **Haut risque** → obligations lourdes (ex : IA en recrutement, crédit, santé, systèmes judiciaires, infrastructures critiques)
+3. **Risque limité** → obligations de transparence (ex : chatbots, deepfakes → il faut informer l'utilisateur que c'est de l'IA)
+4. **Risque minimal** → pas d'obligation spécifique (la majorité des usages, ex : filtres anti-spam, jeux vidéo IA)
+
+Il y a aussi une catégorie séparée pour les **GPAI (General-Purpose AI)** — les modèles de fondation type GPT, Claude, Gemini — avec leurs propres règles (documentation technique, résumé des données d'entraînement, conformité copyright).
+
+## Timeline (mise à jour août 2026)
+
+- **2 fév. 2025** ✅ déjà actif : interdiction des pratiques à risque inacceptable + obligation de "littératie IA" pour les employés
+- **2 août 2025** ✅ déjà actif : obligations GPAI (doc technique, transparence, désignation des autorités nationales)
+- **2 août 2026** ⚠️ point clé : les règles de transparence Article 50 (déclarer les chatbots/contenus IA générés) entrent en vigueur comme prévu
+- **2 déc. 2026** : délai pour les systèmes déjà sur le marché avant août 2026 pour se mettre en conformité Article 50(2), et nouvelles dispositions Article 5 sur la responsabilité
+- **2 déc. 2027** (au lieu du 2 août 2026 initialement) : obligations pour les systèmes **haut risque Annexe III** (usage) — reporté de 16 mois via le "Digital Omnibus on AI"
+- **2 août 2027** : conformité pour les GPAI déjà sur le marché + systèmes IA dans les grands systèmes informatiques (Annexe X)
+- **2 août 2030/2031** : échéances résiduelles pour certains systèmes legacy
+
+## Le changement majeur de 2026 : le "Digital Omnibus on AI"
+
+Ce processus visant à transformer les amendements en loi devait être finalisé pour le 2 août 2026. Raison du report : les organismes de normalisation européens ont pris du retard dans la livraison des standards clés, beaucoup étant désormais attendus vers la fin 2026, ce qui créait un risque d'obligations impossibles à respecter faute d'outils de conformité.
+
+Résultat concret : pour les systèmes haut risque Annexe III (basés sur l'usage), les obligations sont reportées du 2 août 2026 au 2 décembre 2027.
+
+Attention cependant : l'échéance du 2 août 2026 n'est pas totalement annulée — les règles de transparence de l'Article 50 (déclarer les chatbots IA et les contenus synthétiques aux utilisateurs) entrent en vigueur comme prévu, avec des sanctions financières importantes en cas de non-conformité.
+
+## Ce qui te concerne concrètement (dev GenAI)
+
+Vu ton profil (dev GenAI, projets type RailPulse, Innovation Radar, Portfolio Forecasting avec du text-to-SQL, du RAG, de l'analyse IA) :
+
+- **Article 50 (transparence)** : si un de tes outils génère du texte/contenu visible par un utilisateur final sans supervision humaine claire, il faut l'indiquer explicitement comme généré par IA.
+- **GPAI** : si tu construis *sur* des modèles de fondation (Claude, GPT, etc. via API), ce sont **les fournisseurs de modèles** (Anthropic, OpenAI...) qui portent l'essentiel des obligations GPAI — toi tu es "déployeur", avec des obligations plus légères, mais tu dois documenter comment tu utilises le modèle.
+- **Haut risque** : si un projet touche recrutement, crédit, santé ou évaluation de personnes → à surveiller de près, même reporté à déc. 2027, autant s'y préparer dans l'architecture dès maintenant (traçabilité, logs, explicabilité).
+- **Littératie IA** : déjà obligatoire — toute organisation doit assurer un niveau de compréhension IA suffisant chez les employés qui l'utilisent/déploient.
+
+## Sources utiles pour suivre l'évolutionSi tu veux, je peux creuser un point précis — par exemple ce que l'Article 50 impose exactement pour un chatbot ou un outil RAG que tu déploierais dans un projet comme RailPulse ou ING.
