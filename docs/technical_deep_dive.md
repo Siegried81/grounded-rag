@@ -126,7 +126,8 @@ query
         ranked = fused mapped back to Retrieved
     else:
         ranked = dense_pass
-  → if USE_MMR: ranked = MMR(q, ranked vectors, MMR_LAMBDA)   # diversify
+  → if USE_MMR: ranked = MMR(relevance, ranked vectors, MMR_LAMBDA)   # diversify
+        # relevance = min-max RRF score if fused, else dense cosine
   → return ranked[:TOP_K]
 ```
 
@@ -141,7 +142,11 @@ cosine score remains the single, stable gate.
   by summing `1/(k+rank)`. It uses ranks only, so the two incompatible score scales
   combine without normalisation.
 - **MMR (`fusion.mmr`).** Greedily selects passages maximising
-  `λ·sim(query) − (1−λ)·max sim(already-selected)`, dropping near-duplicates. It is
+  `λ·rel − (1−λ)·max sim(already-selected)`, dropping near-duplicates. In dense
+  mode `rel` is the query cosine. In hybrid mode `rel` is the fused RRF score,
+  min-max rescaled to 0..1: scoring by dense cosine would undo the fusion and
+  leave BM25 with no effect on the final ranking, and raw RRF values are too
+  bunched (~0.012–0.033) to weigh against the cosine redundancy term. It is
   skipped gracefully if the store cannot supply vectors (e.g. a test fake).
 
 Knobs (all in `config.py`): `RETRIEVAL_MODE` (`hybrid`|`dense`), `CANDIDATE_K`,
@@ -191,9 +196,13 @@ checker — an NLI/LLM-judge pass is named in the roadmap as the stronger versio
 - **`scripts/run_eval.py` + `rag/metrics.py`.** Runs retrieval over a labelled
   question set and reports `recall@k`, `hit_rate@k`, `MRR`. Relevance is judged at
   the **source level**: a retrieved chunk counts if its `source` is in the
-  question's `relevant_sources`. Caveat: the shipped `eval/ai_act_eval.jsonl` has a
-  single-document corpus, so source-level recall is 0/1 per question — it becomes
-  genuinely informative with multi-document corpora (e.g. several filings).
+  question's `relevant_sources`. It loads the BM25 index like the app and runs
+  the configured `RETRIEVAL_MODE`; `--mode dense` isolates the dense channel.
+  Caveat: the shipped `eval/ai_act_eval.jsonl` has a single-document corpus, so
+  source-level recall is 0/1 per question. The discriminating sets are
+  `eval/ai_act_sections_eval.jsonl` (23 questions, 4 sections) and
+  `eval/filings_sections_eval.jsonl` (25 questions, 6 sections of Apple's FY2025
+  10-K), where each question is labelled with the section that answers it.
 - **`rag/logging_utils.py`.** Appends one JSON line per query (UTC timestamp,
   corpus, #retrieved, top score, refused). Logging never raises — it must not be
   able to break answering.
