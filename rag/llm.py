@@ -44,11 +44,23 @@ def _openai_style(url: str, key: str, model: str, prompt: str, system: str | Non
 
 
 def _groq(prompt: str, system: str | None) -> str:
-    """Call Groq and return the reply text (the missing-key skip is done by complete)."""
-    return _openai_style(
-        "https://api.groq.com/openai/v1/chat/completions",
-        config.GROQ_API_KEY, config.GROQ_MODEL, prompt, system,
-    )
+    """Call Groq, rotating through the configured keys until one succeeds.
+
+    The free tier is rate-limited per key, so when a key fails (typically a 429)
+    we try the next one; only when all keys are exhausted do we raise, letting
+    `complete` fall back to the next provider. The empty-keys case is handled by
+    `complete`, which skips Groq when no key is set.
+    """
+    last_exc: Exception | None = None
+    for key in config.GROQ_API_KEYS:
+        try:
+            return _openai_style(
+                "https://api.groq.com/openai/v1/chat/completions",
+                key, config.GROQ_MODEL, prompt, system,
+            )
+        except Exception as exc:  # rate-limited/failed key -> try the next one
+            last_exc = exc
+    raise last_exc if last_exc else RuntimeError("no Groq API keys configured")
 
 
 def _openrouter(prompt: str, system: str | None) -> str:
@@ -80,7 +92,7 @@ def _provider_table() -> dict:
     A falsy key means the provider is skipped; Ollama needs none, hence True.
     """
     return {
-        "groq": (_groq, config.GROQ_API_KEY),
+        "groq": (_groq, config.GROQ_API_KEYS),
         "openrouter": (_openrouter, config.OPENROUTER_API_KEY),
         "ollama": (_ollama, True),
     }
