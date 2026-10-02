@@ -13,3 +13,13 @@
 {"question": "Which products and services drove Apple's net sales growth?", "relevant_sources": ["05_mdna.txt"]}
 {"question": "What market risks is Apple exposed to?", "relevant_sources": ["06_market_risk.txt"]}
 {"question": "How does interest rate risk affect Apple's investment portfolio and debt?", "relevant_sources": ["06_market_risk.txt"]}
+{"question": "What is the Epic Games lawsuit against Apple about?", "relevant_sources": ["04_legal.txt"]}
+{"question": "What is the civil antitrust lawsuit the Department of Justice filed against Apple in March 2024?", "relevant_sources": ["04_legal.txt"]}
+{"question": "What does Apple offer under the AppleCare brand?", "relevant_sources": ["01_business.txt"]}
+{"question": "How many full-time equivalent employees did Apple have?", "relevant_sources": ["01_business.txt"]}
+{"question": "What is Apple Vision Pro?", "relevant_sources": ["01_business.txt"]}
+{"question": "What payment services such as Apple Pay and Apple Card does Apple offer?", "relevant_sources": ["01_business.txt"]}
+{"question": "Why are Apple's first-quarter net sales seasonally higher?", "relevant_sources": ["01_business.txt"]}
+{"question": "What value-at-risk (VAR) model does Apple apply to its foreign currency derivatives?", "relevant_sources": ["06_market_risk.txt"]}
+{"question": "Which board committee receives reports on cybersecurity incidents?", "relevant_sources": ["03_cybersecurity.txt"]}
+{"question": "What risk does Apple's search licensing arrangement with Google create?", "relevant_sources": ["02_risk_factors.txt"]}
