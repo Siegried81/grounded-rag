@@ -115,3 +115,20 @@ def test_mmr_runs_and_keeps_most_relevant_first():
                    mode="dense", use_mmr=True)
     assert len(out) == 2
     assert out[0].chunk.id == "1"  # the vector most similar to the query comes first
+
+
+def test_hybrid_mmr_keeps_bm25_contribution():
+    # Dense alone ranks 1 first (cosine 1.0 with the query); BM25 ranks 3 first.
+    # Fused RRF puts 3 on top, and MMR must diversify that fused order instead of
+    # reverting to dense cosine, which would silently discard the BM25 channel.
+    store = FakeStore(
+        [_r(1, 0.9), _r(2, 0.85), _r(3, 0.8)],
+        vectors={"1": [1.0, 0.0], "2": [0.6, 0.8], "3": [0.6, -0.8]},
+    )
+    bm25 = FakeBM25([_r(3, 5.0), _r(2, 4.0)])
+    hybrid = retrieve("q", store, FakeEmbedder2D(), top_k=1, threshold=0.5, bm25=bm25,
+                      mode="hybrid", use_mmr=True)
+    dense = retrieve("q", store, FakeEmbedder2D(), top_k=1, threshold=0.5, bm25=bm25,
+                     mode="dense", use_mmr=True)
+    assert hybrid[0].chunk.id == "3"
+    assert dense[0].chunk.id == "1"

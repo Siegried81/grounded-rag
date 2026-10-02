@@ -36,20 +36,28 @@ def mmr(
     candidates: list[tuple[str, list[float]]],
     lambda_mult: float = 0.5,
     top_k: int = 5,
+    relevance: list[float] | None = None,
 ) -> list[str]:
     """Maximal Marginal Relevance selection of up to `top_k` candidate ids.
 
     Greedily picks the candidate maximising
-    lambda*sim(query) - (1-lambda)*max sim(already selected), so results stay
+    lambda*rel - (1-lambda)*max sim(already selected), so results stay
     relevant without being near-duplicates. lambda=1 is pure relevance, 0 pure
     diversity. Zero-norm vectors get similarity 0 instead of NaN.
+
+    `rel` is the query cosine by default. Passing `relevance` (one score per
+    candidate, ideally in [0, 1]) substitutes another relevance signal, such as
+    a fused dense+BM25 score, so MMR diversifies that ranking instead of
+    silently replacing it with dense similarity.
     """
     if not candidates or top_k <= 0:
         return []
-    q = _unit(np.asarray(query_vec, dtype=float))
     ids = [c[0] for c in candidates]
     mat = np.vstack([_unit(np.asarray(c[1], dtype=float)) for c in candidates])
-    rel = mat @ q
+    if relevance is None:
+        rel = mat @ _unit(np.asarray(query_vec, dtype=float))
+    else:
+        rel = np.asarray(relevance, dtype=float)
     sim = mat @ mat.T
     selected: list[int] = []
     remaining = list(range(len(ids)))
