@@ -1,6 +1,6 @@
 {"question": "What products does Apple design, manufacture and market?", "relevant_sources": ["01_business.txt"]}
 {"question": "What are Apple's reportable operating segments?", "relevant_sources": ["01_business.txt"]}
-{"question": "When does Apple's fiscal year end?", "relevant_sources": ["01_business.txt"]}
+{"question": "When does Apple's fiscal year end?", "relevant_sources": ["01_business.txt", "05_mdna.txt"]}
 {"question": "What supply chain and supplier concentration risks does Apple disclose?", "relevant_sources": ["02_risk_factors.txt"]}
 {"question": "Why is Apple's dependence on iPhone sales a risk factor?", "relevant_sources": ["02_risk_factors.txt"]}
 {"question": "What risks does Apple face from global and macroeconomic conditions?", "relevant_sources": ["02_risk_factors.txt"]}
