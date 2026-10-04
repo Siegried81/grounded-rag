@@ -14,10 +14,11 @@ logs/
 **/__pycache__/
 **/*.pyc
 .pytest_cache/
-.claude/
 .streamlit/secrets.toml
 # Corpora are bind-mounted read-only at runtime, so they are not baked in.
 data/
 Dockerfile
 docker-compose.yml
 .dockerignore
+# The React UI is built on the host; only web/dist is useful in the image.
+web/node_modules/

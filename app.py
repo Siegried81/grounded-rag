@@ -27,6 +27,9 @@ from rag.store import VectorStore
 from rag.verify import extract_citations, verify_answer
 
 EVAL_DIR = config.ROOT / "eval"
+# Labels for the answer-language picker, in config.SUPPORTED_ANSWER_LANGUAGES order.
+LANGUAGE_LABELS = {"auto": "Auto (follow the question)", "en": "English",
+                   "fr": "Français", "nl": "Nederlands"}
 
 _CSS = """
 <style>
@@ -119,9 +122,10 @@ def render_header(corpus: str, mode: str) -> None:
 def render_sidebar(corpora: list[str]) -> tuple[str, dict]:
     """Corpus picker, corpus stats, retrieval settings and the about/limits panels.
 
-    Only knobs `retrieve()` actually takes are exposed (mode, top_k, MMR). The
-    refusal threshold is shown but not editable: changing it changes what a
-    refusal means, so it stays a reviewed config value.
+    Only knobs `retrieve()` actually takes are exposed (mode, top_k, MMR), plus
+    the answer language, which only changes the language the answer is written
+    in. The refusal threshold is shown but not editable: changing it changes
+    what a refusal means, so it stays a reviewed config value.
     """
     sb = st.sidebar
     corpus = sb.selectbox("Corpus", corpora)
@@ -156,6 +160,14 @@ def render_sidebar(corpora: list[str]) -> tuple[str, dict]:
         f"(set `SCORE_THRESHOLD` in .env)."
     )
 
+    answer_langs = list(config.SUPPORTED_ANSWER_LANGUAGES)
+    language = sb.selectbox(
+        "Answer language", answer_langs, index=answer_langs.index(config.DEFAULT_ANSWER_LANGUAGE),
+        format_func=LANGUAGE_LABELS.get,
+        help="Language the answer is written in, whatever the language of the documents. "
+             "Quotes and [S#] citations are kept as they are.",
+    )
+
     if sb.button("Clear conversation", use_container_width=True):
         st.session_state.setdefault("history", {})[corpus] = []
 
@@ -164,7 +176,7 @@ def render_sidebar(corpora: list[str]) -> tuple[str, dict]:
     with sb.expander("Limitations"):
         items = ui.build_limitations(config.SCORE_THRESHOLD, config.VERIFY_MIN_GROUNDING, bm25 is not None)
         st.markdown("\n".join(f"- {s}" for s in items))
-    return corpus, {"mode": mode, "top_k": top_k, "use_mmr": use_mmr}
+    return corpus, {"mode": mode, "top_k": top_k, "use_mmr": use_mmr, "language": language}
 
 
 def render_sources(sources, question: str, cited: list[int], title: str) -> None:
@@ -261,7 +273,7 @@ def run_question(question: str, store, bm25, embedder, settings: dict) -> dict:
     msg["sources"] = retrieved
     t1 = time.perf_counter()
     try:
-        answer = answer_question(question, retrieved)
+        answer = answer_question(question, retrieved, language=settings["language"])
         msg["text"] = answer.text
         msg["report"] = verify_answer(answer.text, retrieved, min_grounding=config.VERIFY_MIN_GROUNDING)
     except Exception as exc:  # LLMError or any provider failure: still show the passages
@@ -270,14 +282,20 @@ def run_question(question: str, store, bm25, embedder, settings: dict) -> dict:
     return msg
 
 
-def render_empty_state(corpus: str) -> None:
-    """Short explanation plus clickable example questions from the corpus eval set."""
+def render_empty_state(corpus: str, language: str) -> None:
+    """Short explanation plus clickable example questions from the corpus eval set.
+
+    Examples are shown in English unless French answers were picked, so the
+    suggested questions match the language the user is working in.
+    """
     st.info(
         "Ask a question about the selected corpus. Each answer cites the passages it "
         "uses, which are listed underneath with their scores; if nothing in the "
         "documents is relevant enough, the assistant says so instead of guessing."
     )
-    examples = ui.example_questions(EVAL_DIR / f"{corpus}_eval.jsonl")
+    examples = ui.localized_examples(
+        EVAL_DIR / f"{corpus}_eval.jsonl", "fr" if language == "fr" else "en"
+    )
     if examples:
         st.markdown("**Try one of these:**")
         cols = st.columns(2)
@@ -311,7 +329,7 @@ def main() -> None:
     typed = st.chat_input("Ask a question about this corpus")
     question = typed or st.session_state.pop("pending_question", None)
     if not history and not question:
-        render_empty_state(corpus)
+        render_empty_state(corpus, settings["language"])
     if question:
         history.append({"role": "user", "text": question})
         with st.chat_message("user"):

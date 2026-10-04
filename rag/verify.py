@@ -9,7 +9,7 @@ it can run on every answer and in tests at zero cost.
 import re
 from dataclasses import dataclass, field
 
-from rag.answer import REFUSAL_MESSAGE
+from rag.answer import REFUSAL_MESSAGE_SET, normalize_citations
 from rag.types import Retrieved
 
 _CITATION_RE = re.compile(r"\[S(\d+)\]")
@@ -29,10 +29,13 @@ _STOPWORDS = frozenset(
 def extract_citations(text: str) -> list[int]:
     """Return distinct [S<n>] source indices in order of first appearance.
 
-    Order and de-duplication keep the report stable and readable.
+    Order and de-duplication keep the report stable and readable. Alternative
+    markers such as "【S1】" are normalised first (see answer.normalize_citations),
+    so a caller verifying raw model output counts the same citations as one
+    verifying an answer from answer_question.
     """
     seen: list[int] = []
-    for m in _CITATION_RE.finditer(text):
+    for m in _CITATION_RE.finditer(normalize_citations(text)):
         n = int(m.group(1))
         if n not in seen:
             seen.append(n)
@@ -75,9 +78,13 @@ def verify_answer(
     in the union of the CITED sources' text. It is a cheap faithfulness proxy, NOT an
     entailment check: it catches answers that drift away from their sources, not
     subtle misreadings. A hallucinated [S#] (out of range) makes the answer not ok.
-    The exact refusal message is accepted as fully ok since it asserts nothing.
+    The exact refusal message, in any of the answer languages answer_question can
+    return it in, is accepted as fully ok since it asserts nothing.
+    Alternative citation markers ("【S1】") are normalised first, so uncited-sentence
+    detection and grounding see the same citations as extract_citations.
     """
-    if answer_text.strip() == REFUSAL_MESSAGE:
+    answer_text = normalize_citations(answer_text)
+    if answer_text.strip() in REFUSAL_MESSAGE_SET:
         return VerificationReport(grounding_score=1.0, ok=True)
 
     cited = extract_citations(answer_text)

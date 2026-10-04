@@ -142,3 +142,29 @@ def test_llm_error_hint_rate_limit_and_fallback():
 def test_embed_error_hint_per_provider():
     assert "ollama serve" in ui.embed_error_hint("ollama")
     assert "HOSTED_EMBED_" in ui.embed_error_hint("hosted")
+
+
+def test_localized_examples_translate_known_and_keep_unknown(tmp_path):
+    fr_q = "Quels sont les quatre niveaux de risque définis par l'AI Act ?"
+    rows = [json.dumps({"question": q}) for q in (fr_q, "Untranslated question?")]
+    path = tmp_path / "x_eval.jsonl"
+    path.write_text("\n".join(rows), encoding="utf-8")
+    assert ui.localized_examples(path, "en") == [
+        "What are the four risk levels defined by the AI Act?", "Untranslated question?",
+    ]
+    assert ui.localized_examples(path, "fr") == [fr_q, "Untranslated question?"]
+    assert ui.localized_examples(tmp_path / "missing.jsonl", "en") == []
+
+
+def test_french_ui_texts_mirror_english():
+    assert len(ui.pipeline_steps("fr")) == len(ui.pipeline_steps("en")) == len(ui.PIPELINE_STEPS)
+    assert ui.pipeline_steps("xx") == ui.PIPELINE_STEPS
+    fr = ui.build_limitations(0.42, 0.3, has_bm25=True, lang="fr")
+    assert len(fr) == len(ui.build_limitations(0.42, 0.3, has_bm25=True))
+    assert "0.42" in " ".join(fr) and "BM25" in " ".join(fr)
+    assert "BM25" not in " ".join(ui.build_limitations(0.42, 0.3, has_bm25=False, lang="fr"))
+    assert "seuil de 0.35" in ui.explain_refusal(0.10, 0.35, lang="fr")
+    assert "proche" in ui.explain_refusal(0.33, 0.35, lang="fr")
+    assert "aucun passage" in ui.explain_refusal(None, 0.35, lang="fr")
+    assert "n'atteint pas" in ui.explain_grounding(0.1, 0.3, False, lang="fr")
+    assert "atteint le seuil de 30%" in ui.explain_grounding(0.8, 0.3, True, lang="fr")
