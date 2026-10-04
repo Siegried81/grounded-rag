@@ -1,0 +1,6 @@
+# Streamlit theme and server defaults for app.py.
+[theme]
+primaryColor = "#FF6200"
+
+[browser]
+gatherUsageStats = false

@@ -1,0 +1,79 @@
+# Grounded RAG assistant: Streamlit app, optional local Ollama, one-shot ingestion.
+#
+#   docker compose up --build                          # app only (hosted LLM, host Ollama or none)
+#   docker compose --profile local-llm up --build      # app + bundled Ollama
+#   docker compose --profile tools run --rm ingest --corpus ai_act
+#
+# See docs/docker.md for the reasoning behind each choice.
+
+x-app-common: &app-common
+  build: .
+  image: grounded-rag:latest
+  # Secrets and provider settings come from .env, never from the image. The file
+  # is optional so `docker compose config` and a key-less demo still work.
+  env_file:
+    - path: .env
+      required: false
+  environment:
+    # Inside a container "localhost" is the container itself, so the OLLAMA_URL
+    # from a host-oriented .env would point nowhere. Default to the bundled
+    # `ollama` service, reached by its Compose service DNS name. To use an Ollama
+    # running on the host instead, set OLLAMA_URL_IN_DOCKER=http://host.docker.internal:11434.
+    OLLAMA_URL: ${OLLAMA_URL_IN_DOCKER:-http://ollama:11434}
+  extra_hosts:
+    # Makes host.docker.internal resolve on Linux too (built in on Docker Desktop).
+    - "host.docker.internal:host-gateway"
+  volumes:
+    # Built indexes; each corpus folder also holds its embedding cache
+    # (index/<corpus>/embed_cache.json), so one volume persists both.
+    - rag_index:/app/index
+    - rag_logs:/app/logs
+    # Corpora are inputs only: read-only so neither the app nor ingestion can alter them.
+    - ./data:/app/data:ro
+
+services:
+  app:
+    <<: *app-common
+    ports:
+      - "8501:8501"
+    restart: unless-stopped
+    depends_on:
+      ollama:
+        condition: service_healthy
+        # Only enforced when the `local-llm` profile is active; without it the
+        # app starts alone and uses hosted providers / host Ollama.
+        required: false
+
+  ingest:
+    <<: *app-common
+    profiles: ["tools"]
+    # One-shot: builds the index for one corpus and exits. Arguments after the
+    # service name replace `command`, e.g. `run --rm ingest --corpus filings`.
+    entrypoint: ["python", "cli.py", "ingest"]
+    command: ["--corpus", "ai_act"]
+    restart: "no"
+    depends_on:
+      ollama:
+        condition: service_healthy
+        required: false
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    volumes:
+      # Pulled models are several GB; a named volume keeps them across restarts.
+      - ollama_models:/root/.ollama
+    # Not published on the host: only the app and ingest containers need it.
+    healthcheck:
+      # The image ships no curl; `ollama list` succeeds once the server answers.
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  rag_index:
+  rag_logs:
+  ollama_models:
