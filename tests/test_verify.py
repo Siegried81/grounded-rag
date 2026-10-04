@@ -67,3 +67,25 @@ def test_refusal_message_is_ok():
 def test_format_report_mentions_status():
     out = format_report(verify_answer("Hello [S9].", SOURCES))
     assert "FAILED" in out and "9" in out
+
+
+def test_lenticular_citations_are_recognised():
+    """gpt-oss cites as 【S1】 (sometimes with a suffix); it must count like [S1]."""
+    from rag.answer import normalize_citations
+
+    assert normalize_citations("Yes 【S1】【S3】 and ［S2］, see 【S4†L4-L9】.") == \
+        "Yes [S1][S3] and [S2], see [S4]."
+    assert extract_citations("Net sales rose 【S2】 then fell 【S1】.") == [2, 1]
+
+
+def test_bold_grouped_and_zero_width_citations_are_recognised():
+    """Forms found in real gpt-oss answers (aa-12, aa-13, fs-12) count as citations."""
+    from rag.answer import normalize_citations
+
+    assert normalize_citations("Yes [**S1**].") == "Yes [S1]."
+    assert normalize_citations("Both [**S1**, **S5**] and [S2; S3].") == "Both [S1][S5] and [S2][S3]."
+    assert normalize_citations("See [​S4​].") == "See [S4]."
+    assert normalize_citations("Plain [S1] stays [S1].") == "Plain [S1] stays [S1]."
+    # Ordinary bracketed text is not a citation and is left alone.
+    assert normalize_citations("Annex [III] and [see note]") == "Annex [III] and [see note]"
+    assert extract_citations("Net sales [**S2**, **S1**].") == [2, 1]

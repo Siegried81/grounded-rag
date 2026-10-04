@@ -16,14 +16,22 @@ limitation — is in [`technical_deep_dive.md`](technical_deep_dive.md).
 3. **Index**: vectors go into a NumPy cosine store (`rag/store.py`) and a BM25
    keyword index (`rag/lexical.py`), both saved under `index/<corpus>`.
 
-**Query (`cli.py`, `app.py`)**
+**Query (`cli.py`, `app.py` Streamlit, `api/main.py` FastAPI + `web/` React)**
 
 4. **Retrieve** (`rag/retrieve.py`): the question is embedded; dense cosine and BM25
    rankings are fused (RRF) and diversified (MMR). See "Cite or refuse" below.
 5. **Answer** (`rag/answer.py` + `rag/llm.py`): surviving passages go to the LLM in
-   one structured call; it must answer only from them and cite `[S1]`, `[S2]`, …
+   one structured call, each wrapped in a `<source>` fence that marks it as
+   untrusted data (prompt-injection mitigation); the model must answer only from
+   them and cite `[S1]`, `[S2]`, … Alternative markers some models emit (`【S1】`)
+   are normalised to `[S1]`. The LLM client rotates Groq keys, waits for an
+   announced rate-limit reset, falls back across providers and caches responses.
 6. **Verify** (`rag/verify.py`): every `[S#]` is checked to be real and a lexical
    grounding score is computed, on every answer.
+
+**Evaluation (`scripts/`)**: retrieval metrics (`run_eval.py`), answer-level
+metrics (`run_answer_eval.py`) and an adversarial red-team suite
+(`run_redteam.py`).
 
 ## Cite or refuse
 

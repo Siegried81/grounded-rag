@@ -54,6 +54,19 @@ USE_EMBED_CACHE = os.getenv("USE_EMBED_CACHE", "true").lower() == "true"
 VERIFY_MIN_GROUNDING = float(os.getenv("VERIFY_MIN_GROUNDING", "0.30"))
 QUERY_LOG_PATH = ROOT / "logs" / "queries.jsonl"
 
+# --- Answer language ---------------------------------------------------------
+# Language the UIs ask answers to be written in. "auto" adds nothing to the
+# prompt (the model usually follows the language of the question and sources);
+# a named language adds one instruction sentence (see rag/answer.py). Only the
+# UIs read this default: the evaluation scripts call answer_question without a
+# language, so their prompts, and the LLM cache built on them, stay unchanged.
+SUPPORTED_ANSWER_LANGUAGES = ("auto", "en", "fr", "nl")
+DEFAULT_ANSWER_LANGUAGE = os.getenv("ANSWER_LANGUAGE", "en").strip().lower()
+if DEFAULT_ANSWER_LANGUAGE not in SUPPORTED_ANSWER_LANGUAGES:
+    DEFAULT_ANSWER_LANGUAGE = "en"
+# Languages the interface texts (examples, explanations, limitations) exist in.
+SUPPORTED_UI_LANGUAGES = ("en", "fr")
+
 # --- Embedding backend -------------------------------------------------------
 EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "ollama")  # ollama | hosted | fake
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
@@ -84,6 +97,18 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.2:3b")
+
+# Groq's free tier limits tokens per minute per key. When every key answers 429,
+# wait for the window Groq announces (capped here) and retry once before falling
+# back to the next provider: a short wait keeps answers on the configured model
+# instead of silently switching providers mid-evaluation. 0 = fall back at once.
+GROQ_MAX_WAIT_S = float(os.getenv("GROQ_MAX_WAIT_S", "65"))
+
+# Successful completions are cached on disk by an exact hash of the request
+# (provider order, models, system prompt, prompt). Re-asking the same question
+# over the same passages, or re-running an evaluation, then costs no quota.
+LLM_CACHE = os.getenv("LLM_CACHE", "1") == "1"
+LLM_CACHE_DIR = INDEX_DIR / "llm_cache"
 
 # Ordered fallback chain used by rag/llm.py. First provider is the configured one.
 LLM_FALLBACK_ORDER = [
