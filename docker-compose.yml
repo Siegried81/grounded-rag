@@ -3,6 +3,7 @@
 #   docker compose up --build                          # app only (hosted LLM, host Ollama or none)
 #   docker compose --profile local-llm up --build      # app + bundled Ollama
 #   docker compose --profile tools run --rm ingest --corpus ai_act
+#   docker compose --profile api up --build            # + JSON API / React UI on :8000
 #
 # See docs/docker.md for the reasoning behind each choice.
 
@@ -42,6 +43,28 @@ services:
         condition: service_healthy
         # Only enforced when the `local-llm` profile is active; without it the
         # app starts alone and uses hosted providers / host Ollama.
+        required: false
+
+  # JSON API for the React UI (api/main.py). It also serves web/dist when that
+  # folder was built on the host before `docker compose build` (the image has no
+  # Node toolchain). Opt-in: `docker compose --profile api up --build`.
+  api:
+    <<: *app-common
+    profiles: ["api"]
+    command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      # The image's default healthcheck probes Streamlit on 8501; this one probes the API.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    depends_on:
+      ollama:
+        condition: service_healthy
         required: false
 
   ingest:
