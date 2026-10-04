@@ -1,0 +1,23 @@
+# Keep secrets, local environments and generated state out of the build context
+# and the image. Indexes, the embedding cache (inside index/) and logs are
+# runtime state and live in Docker volumes instead.
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+index/
+cache/
+logs/
+.git/
+.gitignore
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+.claude/
+.streamlit/secrets.toml
+# Corpora are bind-mounted read-only at runtime, so they are not baked in.
+data/
+Dockerfile
+docker-compose.yml
+.dockerignore
