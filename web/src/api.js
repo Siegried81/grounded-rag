@@ -31,6 +31,11 @@ export const getConfig = (corpus, uiLang) =>
 
 export const getCorpora = (uiLang) => request(withQuery("/api/corpora", { ui_lang: uiLang }));
 
+// Upper bound on one /api/ask round trip. Free-tier LLM calls can take a
+// minute or two under rate limiting, but a request that never returns would
+// otherwise keep the UI locked (busy) forever.
+export const ASK_TIMEOUT_MS = 120000;
+
 // /api/ask reads `ui_lang` from the JSON body (it localises the refusal and
 // verification explanations it builds), so it travels there, not in the query.
 export const ask = (body, uiLang) =>
@@ -38,4 +43,5 @@ export const ask = (body, uiLang) =>
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(uiLang ? { ...body, ui_lang: uiLang } : body),
+    signal: AbortSignal.timeout(ASK_TIMEOUT_MS),
   });

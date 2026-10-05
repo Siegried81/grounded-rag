@@ -16,7 +16,7 @@ function SourceCard({ src, domId, flash }) {
         <span className="src-file" title={src.source}>{src.source}</span>
         {src.page != null && <span className="src-page">{t("pageShort", { n: src.page })}</span>}
         <span className="src-score" title={t("scoreTitle")}>
-          {src.score.toFixed(3)}
+          {t("score")} {src.score.toFixed(3)}
         </span>
         {src.cited && <span className="src-cited">{t("cited")}</span>}
       </header>
@@ -106,6 +106,17 @@ function ErrorBanner({ title, hint }) {
   );
 }
 
+const ERROR_KINDS = ["embedding", "llm", "index"];
+
+/** Error object returned in the body of /api/ask. The server's `message` is
+ * English only, so the title is picked here from `kind` and the server
+ * `hint` (which carries the actual exception text) stays as the body. */
+function ServerError({ error }) {
+  const { t } = useT();
+  const title = ERROR_KINDS.includes(error.kind) ? t(`errorKind.${error.kind}`) : error.message;
+  return <ErrorBanner title={title} hint={error.hint} />;
+}
+
 export default function Turn({ turn }) {
   const { t } = useT();
   const [flashSid, setFlashSid] = useState(null);
@@ -139,7 +150,8 @@ export default function Turn({ turn }) {
       <div className="msg user">
         <div className="bubble">{turn.question}</div>
       </div>
-      <div className="msg assistant">
+      {/* The id is the scroll target once the turn finishes (see App.jsx). */}
+      <div className="msg assistant" id={`turn-${turn.id}-assistant`}>
         <div className="avatar" aria-hidden="true">S</div>
         <div className="assistant-body">
           {turn.status === "loading" && (
@@ -156,7 +168,7 @@ export default function Turn({ turn }) {
             />
           )}
 
-          {r && r.error && <ErrorBanner title={r.error.message} hint={r.error.hint} />}
+          {r && r.error && <ServerError error={r.error} />}
 
           {r && r.refused && (
             <>
