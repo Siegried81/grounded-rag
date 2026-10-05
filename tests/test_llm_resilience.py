@@ -3,6 +3,8 @@
 All offline: `requests.post` is replaced by a stub and `time.sleep` by a recorder.
 """
 
+import json
+
 import pytest
 import requests
 
@@ -105,6 +107,48 @@ def test_changing_the_model_misses_the_cache(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "GROQ_MODEL", "another-model")
     llm.complete("p", order=["groq"])
     assert len(calls) == 2
+
+
+def test_an_empty_reply_falls_through_to_the_next_provider_and_is_not_cached(monkeypatch, tmp_path):
+    monkeypatch.setattr(config, "LLM_CACHE", True)
+    monkeypatch.setattr(config, "LLM_CACHE_DIR", tmp_path / "cache")
+    monkeypatch.setattr(config, "GROQ_API_KEYS", ["k1"])
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "or-key")
+    urls: list[str] = []
+
+    def post(url, **k):
+        urls.append(url)
+        return _Resp(200, "") if "groq" in url else _Resp(200, "from openrouter")
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    assert llm.complete("p", order=["groq", "openrouter"]) == "from openrouter"
+    assert len(urls) == 2 and "groq" in urls[0] and "openrouter" in urls[1]
+    assert llm.last_provider() == "openrouter"
+    # The cache holds the real reply and who gave it, never the empty one.
+    [entry] = list((tmp_path / "cache").iterdir())
+    assert json.loads(entry.read_text(encoding="utf-8")) == {
+        "text": "from openrouter", "provider": "openrouter",
+    }
+    # A cache hit reports the provider that produced the stored reply.
+    monkeypatch.setattr(llm.requests, "post", lambda *a, **k: _Resp(200, "fresh"))
+    assert llm.complete("p", order=["groq", "openrouter"]) == "from openrouter"
+    assert llm.last_provider() == "openrouter"
+
+
+def test_an_empty_reply_from_every_provider_is_an_error(monkeypatch):
+    monkeypatch.setattr(config, "GROQ_API_KEYS", ["k1"])
+    monkeypatch.setattr(llm.requests, "post", lambda *a, **k: _Resp(200, "   "))
+    with pytest.raises(llm.LLMError, match="groq: empty reply"):
+        llm.complete("p", order=["groq"])
+
+
+def test_groq_with_no_keys_is_skipped_not_crashed(monkeypatch):
+    monkeypatch.setattr(config, "GROQ_API_KEYS", [])
+    monkeypatch.setattr(llm.requests, "post", lambda *a, **k: pytest.fail("no HTTP expected"))
+    with pytest.raises(llm.LLMError, match="groq: no API key"):
+        llm.complete("p", order=["groq"])
+    with pytest.raises(RuntimeError, match="no Groq API keys"):
+        llm._groq("p", None)  # called directly: a clear error, not an UnboundLocalError
 
 
 def test_a_failed_request_is_not_cached(monkeypatch, tmp_path):

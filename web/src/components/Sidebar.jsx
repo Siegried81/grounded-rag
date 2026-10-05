@@ -1,6 +1,21 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useT } from "../i18n.js";
 import { Inline } from "../markdown.jsx";
+
+// Must match the drawer breakpoint in styles.css.
+const DRAWER_QUERY = "(max-width: 860px)";
+
+/** True when the sidebar is an off-canvas drawer (narrow screens). */
+function useIsDrawer() {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(DRAWER_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(DRAWER_QUERY);
+    const onChange = (e) => setNarrow(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return narrow;
+}
 
 export default function Sidebar({
   open, onClose, corpora, corpus, onCorpus, settings, onSettings, config, onClear, canClear,
@@ -8,14 +23,47 @@ export default function Sidebar({
   const { t } = useT();
   const current = corpora.find((c) => c.name === corpus);
   const set = (patch) => onSettings({ ...settings, ...patch });
+  const isDrawer = useIsDrawer();
+  const closeRef = useRef(null);
+
+  // Drawer behaviour: the closed drawer is only translated off-screen, so
+  // `inert` keeps Tab from walking through its hidden controls; Escape closes
+  // it and focus lands on the close button when it opens. On wide screens the
+  // sidebar is always visible and none of this applies.
+  // The focus effect depends only on `open`: `onClose` is a fresh arrow on
+  // every App render and re-running it would steal focus from a control the
+  // user is adjusting inside the open drawer.
+  useEffect(() => {
+    if (isDrawer && open) closeRef.current?.focus();
+  }, [isDrawer, open]);
+
+  useEffect(() => {
+    if (!isDrawer || !open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [isDrawer, open, onClose]);
 
   return (
     <>
       <div className={`scrim ${open ? "show" : ""}`} onClick={onClose} aria-hidden="true" />
-      <aside className={`sidebar ${open ? "open" : ""}`} aria-label={t("settings")}>
+      {/* React 18 only forwards `inert` as a string attribute, hence "" / undefined. */}
+      <aside
+        className={`sidebar ${open ? "open" : ""}`}
+        aria-label={t("settings")}
+        inert={isDrawer && !open ? "" : undefined}
+      >
         <div className="sidebar-head">
           <span className="brand">{t("settings")}</span>
-          <button type="button" className="icon-btn close-btn" onClick={onClose} aria-label={t("closeSettings")}>
+          <button
+            ref={closeRef}
+            type="button"
+            className="icon-btn close-btn"
+            onClick={onClose}
+            aria-label={t("closeSettings")}
+          >
             <span aria-hidden="true">✕</span>
           </button>
         </div>

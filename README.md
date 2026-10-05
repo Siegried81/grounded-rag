@@ -48,6 +48,13 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
 
 All runs: hybrid retrieval; generation with `openai/gpt-oss-120b` on Groq's free tier.
 
+The tables below predate the current scoring code (Unicode-aware verifier with
+FR/NL stopwords and `strict_ok`, refusal detection shared with the red team,
+scale-aware number matching) and will be re-run; until then they describe the
+previous scoring, not the current one. Re-run with
+`.venv/bin/python scripts/run_answer_eval.py` and
+`.venv/bin/python scripts/run_redteam.py --verbose`.
+
 **Retrieval** (`scripts/run_eval.py`, k = 3, each question labelled with its one answering section)
 
 | Corpus            | Questions | Recall@3 | MRR   |
@@ -87,25 +94,48 @@ with a phrase a role-play demanded, and cited a user-demanded `[S9]` (`verify.py
 
 ## Quick start
 
+Linux / WSL (Windows PowerShell: `.venv\Scripts\Activate.ps1` and `copy`):
+
 ```bash
 python -m venv .venv
-.venv\Scripts\Activate.ps1            # macOS/Linux: source .venv/bin/activate
+source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env                  # set LLM_PROVIDER and a key (e.g. GROQ_API_KEY)
+ollama pull nomic-embed-text          # local embeddings (the default EMBED_PROVIDER)
+ollama pull llama3.2:3b               # only needed for the Ollama generation fallback
 
 python cli.py ingest --corpus ai_act
 python cli.py ask --corpus ai_act "What are the obligations for high-risk AI systems?"
 ```
 
-**React UI** — two terminals, then open http://localhost:5180:
+`config.py` refuses to import with an invalid `RETRIEVAL_MODE`, and a corpus
+indexed with another embedding model than the configured one is reported as an
+`index` error instead of answering with meaningless scores: re-run `ingest`.
+
+**React UI** — two terminals, then open http://localhost:5180 (API on 8002):
 
 ```bash
-python -m uvicorn api.main:app --port 8002
+.venv/bin/python -m uvicorn api.main:app --port 8002
 cd web && npm install && npm run dev
 ```
 
-**Streamlit**: `python -m streamlit run app.py` · **Docker**: `docker compose up --build`
-(Streamlit on :8501; see [docs/docker.md](docs/docker.md) for the API profile and bundled Ollama).
+`npm` is installed through nvm, which only loads in an interactive shell: run
+the second terminal as a normal login shell and check that `which npm` points
+under `~/.nvm` before `npm install`.
+
+**Streamlit**: `python -m streamlit run app.py` (port 8501) · **Docker**:
+`docker compose up --build` (Streamlit on :8501) or
+`docker compose --profile api up --build` (API + built React UI on :8002);
+see [docs/docker.md](docs/docker.md) for the bundled Ollama.
+
+**Evaluations** (live LLM calls, except the retrieval one):
+
+```bash
+.venv/bin/python scripts/run_eval.py                     # retrieval; defaults to ai_act_sections, Wilson interval
+.venv/bin/python scripts/run_answer_eval.py              # answers; per-row provider and diagnosis columns
+.venv/bin/python scripts/run_redteam.py --verbose        # red team; writes logs/redteam_results.jsonl
+.venv/bin/python scripts/run_phrasing_eval.py            # same question, formal / casual / other-language phrasings
+```
 
 ## Providers
 
@@ -117,7 +147,8 @@ With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **247 tests, fully offline** (fake embedder, all HTTP mocked).
+`python -m pytest -q` — the whole suite runs **offline** (fake embedder, all HTTP
+mocked); the count printed at the end is the current one.
 
 ## Limitations
 

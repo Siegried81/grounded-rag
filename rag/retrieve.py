@@ -20,6 +20,27 @@ from rag.fusion import mmr, reciprocal_rank_fusion
 from rag.types import Retrieved
 
 
+class IndexMismatchError(ValueError):
+    """The index was built with another embedding model than the one configured now."""
+
+
+def check_same_embedder(store, embedder) -> None:
+    """Raise IndexMismatchError if `store` was built with another model than `embedder`.
+
+    Cosine scores are only comparable inside one embedding space. A query
+    embedded by a different model than the index gives scores with no meaning,
+    and the refusal threshold (SCORE_THRESHOLD) with them, without any error:
+    the answers just get quietly worse. Duck-typed stores or embedders without a
+    `model` (test fakes) are not checked.
+    """
+    built, current = getattr(store, "model", None), getattr(embedder, "model", None)
+    if built and current and built != current:
+        raise IndexMismatchError(
+            f"index built with embedding model {built!r}, but the configured embedder is "
+            f"{current!r}: re-run ingestion (python cli.py ingest --corpus ...) or restore the setting"
+        )
+
+
 def retrieve(
     question: str,
     store,
@@ -41,6 +62,7 @@ def retrieve(
     use_mmr = config.USE_MMR if use_mmr is None else use_mmr
     candidate_k = candidate_k or config.CANDIDATE_K
 
+    check_same_embedder(store, embedder)
     query_vec = embedder.embed([question])[0]
     dense = store.search(query_vec, candidate_k)
 

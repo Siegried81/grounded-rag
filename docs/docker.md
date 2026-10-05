@@ -7,8 +7,10 @@ copied into the image.
 
 ## Prerequisites
 
-- Docker Engine with Compose v2.20 or newer (needed for `required: false` on
-  `env_file` and `depends_on`).
+- Docker Engine with Compose v2.24 or newer (needed for `path`/`required: false`
+  on `env_file` and `required: false` on `depends_on`).
+- On Windows with WSL: Docker Desktop, Settings, Resources, WSL integration,
+  enabled for your distribution, or `docker` in WSL talks to nothing.
 - A `.env` file copied from `.env.example` (optional: without it the app falls
   back to the defaults in `config.py`).
 
@@ -29,6 +31,9 @@ docker compose --profile local-llm up -d ollama
 docker compose --profile local-llm exec ollama ollama pull nomic-embed-text
 docker compose --profile tools --profile local-llm run --rm ingest --corpus ai_act
 docker compose --profile tools --profile local-llm run --rm ingest --corpus filings
+# The evaluation sets and the demo use the per-section corpora:
+docker compose --profile tools --profile local-llm run --rm ingest --corpus ai_act_sections
+docker compose --profile tools --profile local-llm run --rm ingest --corpus filings_sections
 ```
 
 Arguments after `ingest` replace the default `--corpus ai_act`, because the
@@ -54,6 +59,22 @@ docker compose --profile local-llm exec ollama ollama pull llama3.2:3b
 
 Set `LLM_PROVIDER=ollama` in `.env` to generate locally; otherwise Ollama is only
 used as the last fallback.
+
+An Ollama running inside WSL listens on `127.0.0.1` by default, which containers
+cannot reach through `host.docker.internal`. Either use the bundled `ollama`
+service (above), or start the WSL one with `OLLAMA_HOST=0.0.0.0`.
+
+**API and React UI (profile `api`)**
+
+```bash
+cd web && npm install && npm run build && cd ..   # on the host: the image has no Node
+docker compose build                              # copies web/dist into the image
+docker compose --profile api up -d api
+```
+
+Open http://localhost:8002 (the API serves the built UI). Without `web/dist`
+only the JSON API is served. The API loads each index once and keeps it in
+memory, so after an `ingest` run restart it: `docker compose --profile api restart api`.
 
 **Ask from the CLI inside the container**
 

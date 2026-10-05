@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import threading
 import time
 
 import requests
@@ -28,6 +29,17 @@ TIMEOUT_S = 60
 
 class LLMError(Exception):
     """Raised when every provider in the fallback order failed or was skipped."""
+
+
+# Which provider produced the last completion on this thread. The fallback chain
+# can silently move from Groq to OpenRouter or Ollama, so evaluation rows record
+# it: a result is only "from gpt-oss-120b" if it says so.
+_last = threading.local()
+
+
+def last_provider() -> str | None:
+    """Provider name of this thread's last successful `complete` call, or None."""
+    return getattr(_last, "provider", None)
 
 
 def _messages(prompt: str, system: str | None) -> list[dict]:
@@ -110,7 +122,7 @@ def _groq(prompt: str, system: str | None) -> str:
                 wait = _rate_limit_wait(exc)
                 if wait is not None:
                     waits.append(wait)
-        all_limited = len(waits) == len(config.GROQ_API_KEYS)
+        all_limited = bool(waits) and len(waits) == len(config.GROQ_API_KEYS)
         if round_ or not all_limited or config.GROQ_MAX_WAIT_S <= 0:
             break
         time.sleep(min(min(waits) + 0.5, config.GROQ_MAX_WAIT_S))
@@ -163,7 +175,8 @@ def complete(prompt: str, *, system: str | None = None, order: list[str] | None 
     cache_path = _cache_path(names, prompt, system)
     cached = _cache_get(cache_path)
     if cached is not None:
-        return cached
+        _last.provider = cached[1]
+        return cached[0]
     table = _provider_table()
     reasons: list[str] = []
     for name in names:
@@ -179,7 +192,13 @@ def complete(prompt: str, *, system: str | None = None, order: list[str] | None 
         except Exception as exc:  # any failure -> try the next provider
             reasons.append(f"{name}: {exc}")
             continue
-        _cache_put(cache_path, text)
+        if not isinstance(text, str) or not text.strip():
+            # gpt-oss sometimes returns null or "" content. That is a failed
+            # attempt, not an answer: try the next provider and never cache it.
+            reasons.append(f"{name}: empty reply")
+            continue
+        _cache_put(cache_path, text, name)
+        _last.provider = name
         return text
     raise LLMError("All LLM providers failed: " + "; ".join(reasons or ["none configured"]))
 
@@ -202,22 +221,30 @@ def _cache_path(names: list[str], prompt: str, system: str | None):
     return config.LLM_CACHE_DIR / f"{digest.hexdigest()}.json"
 
 
-def _cache_get(path) -> str | None:
-    """A stored completion for this request; a missing or broken entry is a miss."""
+def _cache_get(path) -> tuple[str, str | None] | None:
+    """A stored (completion, provider) for this request; a missing, broken or empty entry is a miss.
+
+    Entries written before the provider was recorded have none.
+    """
     if path is None or not path.exists():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))["text"]
+        entry = json.loads(path.read_text(encoding="utf-8"))
+        text = entry["text"]
     except (OSError, ValueError, KeyError, TypeError):
         return None
+    if not isinstance(text, str) or not text.strip():
+        return None
+    return text, entry.get("provider")
 
 
-def _cache_put(path, text: str) -> None:
-    """Store a completion; a cache write failure never fails the answer."""
+def _cache_put(path, text: str, provider: str) -> None:
+    """Store a completion and the provider that produced it; a write failure never fails the answer."""
     if path is None:
         return
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"text": text}, ensure_ascii=False), encoding="utf-8")
+        path.write_text(json.dumps({"text": text, "provider": provider}, ensure_ascii=False),
+                        encoding="utf-8")
     except OSError:
         pass
