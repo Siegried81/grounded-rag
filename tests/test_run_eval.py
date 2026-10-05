@@ -77,3 +77,31 @@ def test_eval_falls_back_to_dense_without_bm25_index(run_eval, monkeypatch, caps
     out = capsys.readouterr().out
     assert "mode=dense" in out
     assert "recall@3=1.000" in out
+
+
+def test_hit_rate_comes_with_count_and_wilson_interval(run_eval, monkeypatch, capsys):
+    monkeypatch.setattr(run_eval.BM25Index, "load", staticmethod(lambda path: "bm25"))
+    _main(run_eval, monkeypatch)
+    out = capsys.readouterr().out
+    assert "questions=1" in out
+    # 1/1 hit: Wilson gives [0.207-1.000], the normal approximation would give [1-1].
+    assert "hit_rate@3=1.000 (95% CI [0.207-1.000], n=1)" in out
+
+
+def test_defaults_point_at_the_sections_corpus_and_its_eval_file(run_eval, monkeypatch, capsys):
+    monkeypatch.setattr(run_eval.BM25Index, "load", staticmethod(lambda path: "bm25"))
+    assert run_eval.DEFAULT_CORPUS == "ai_act_sections"
+    assert run_eval.default_eval_file("filings_sections") == (
+        run_eval.config.ROOT / "eval" / "filings_sections_eval.jsonl"
+    )
+    asked = []
+
+    def fake_default(corpus):
+        asked.append(corpus)
+        return run_eval.eval_file
+
+    monkeypatch.setattr(run_eval, "default_eval_file", fake_default)
+    monkeypatch.setattr(sys, "argv", ["run_eval.py", "--corpus", "filings_sections"])
+    run_eval.main()
+    assert asked == ["filings_sections"]
+    assert "corpus=filings_sections" in capsys.readouterr().out
