@@ -32,7 +32,7 @@ from rag import ui_helpers as ui
 from rag.answer import answer_question
 from rag.embed import get_embedder
 from rag.lexical import BM25Index
-from rag.retrieve import retrieve
+from rag.retrieve import IndexMismatchError, retrieve
 from rag.store import VectorStore
 from rag.verify import extract_citations, verify_answer
 
@@ -294,6 +294,10 @@ def ask(req: AskRequest) -> dict:
         retrieved = retrieve(
             question, store, embedder, top_k=top_k, bm25=bm25, mode=mode, use_mmr=use_mmr,
         )
+    except IndexMismatchError as exc:  # the index needs re-ingesting, not a running backend
+        out["latency"]["retrieval_s"] = round(time.perf_counter() - t0, 3)
+        out["error"] = {"kind": "index", "message": "This corpus must be re-indexed.", "hint": str(exc)}
+        return out
     except Exception:  # embedding backend down or misconfigured
         log.exception("retrieval failed")
         out["latency"]["retrieval_s"] = round(time.perf_counter() - t0, 3)
@@ -323,7 +327,6 @@ def ask(req: AskRequest) -> dict:
     t1 = time.perf_counter()
     try:
         answer = answer_question(question, retrieved, language=language)
-        report = verify_answer(answer.text, retrieved, min_grounding=config.VERIFY_MIN_GROUNDING)
     except Exception as exc:  # LLMError or any provider failure: still show the passages
         log.warning("answer step failed: %s", exc)
         out["latency"]["answer_s"] = round(time.perf_counter() - t1, 3)
@@ -335,6 +338,9 @@ def ask(req: AskRequest) -> dict:
         }
         return out
     out["latency"]["answer_s"] = round(time.perf_counter() - t1, 3)
+    # Outside the try above: verification is offline code, so a failure here is a
+    # bug to surface, not a provider outage to explain with an API-key hint.
+    report = verify_answer(answer.text, retrieved, min_grounding=config.VERIFY_MIN_GROUNDING)
 
     out["answer"] = answer.text
     out["sources"] = _sources(retrieved, question, extract_citations(answer.text))

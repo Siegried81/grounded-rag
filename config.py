@@ -34,7 +34,11 @@ TOP_K = int(os.getenv("TOP_K", "5"))
 SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "0.35"))
 # "hybrid" fuses dense (cosine) and BM25 (keyword) rankings; "dense" uses vectors
 # only. Hybrid catches exact terms (identifiers, acronyms) that embeddings miss.
-RETRIEVAL_MODE = os.getenv("RETRIEVAL_MODE", "hybrid")  # hybrid | dense
+RETRIEVAL_MODE = os.getenv("RETRIEVAL_MODE", "hybrid").strip().lower()  # hybrid | dense
+# retrieve() treats anything that is not "dense" as hybrid, so a typo would run
+# hybrid while the UIs display the typo. Fail at start-up instead.
+if RETRIEVAL_MODE not in ("hybrid", "dense"):
+    raise ValueError(f"RETRIEVAL_MODE must be 'hybrid' or 'dense', got {RETRIEVAL_MODE!r}")
 # Size of the candidate pool pulled from each channel before fusion/MMR/top-k.
 CANDIDATE_K = int(os.getenv("CANDIDATE_K", "20"))
 # Maximal Marginal Relevance reorders the final set to drop near-duplicate
