@@ -119,4 +119,11 @@ class VectorStore:
         store = cls(index_dir, payload["model"])
         store._chunks = [Chunk(**c) for c in payload["chunks"]]
         store._vectors = np.load(vec_path).astype(np.float32, copy=False)
+        # Search maps row i of the matrix to chunk i; a half-written index (one
+        # file from an older ingest) would silently return the wrong passages.
+        if len(store._vectors) != len(store._chunks):
+            raise ValueError(
+                f"Index in {index_dir} is inconsistent ({len(store._chunks)} chunks, "
+                f"{len(store._vectors)} vectors); run ingestion again."
+            )
         return store

@@ -1,5 +1,6 @@
 """Offline tests for the NumPy vector store: search, clamping, validation, persistence."""
 
+import numpy as np
 import pytest
 
 from rag.store import VectorStore
@@ -61,3 +62,13 @@ def test_save_load_roundtrip(tmp_path):
 def test_load_missing_index(tmp_path):
     with pytest.raises(FileNotFoundError):
         VectorStore.load(tmp_path / "nope")
+
+
+def test_load_rejects_chunk_vector_count_mismatch(tmp_path):
+    # A half-written index (vectors from an older ingest) would otherwise map
+    # row i to the wrong chunk and return the wrong passage without any error.
+    s = _store(tmp_path)
+    s.save()
+    np.save(tmp_path / "idx" / "vectors.npy", np.eye(2, 3, dtype=np.float32))
+    with pytest.raises(ValueError, match="3 chunks, 2 vectors"):
+        VectorStore.load(tmp_path / "idx")
