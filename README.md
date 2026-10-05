@@ -23,6 +23,10 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
   other citation (this took verify-ok from 0.21 to 1.00 on the same answers).
 - **Verification on every answer**: hallucinated source numbers, uncited claims,
   and a lexical grounding score.
+- **Every citation is readable in context**: a source card shows a window around
+  the match, and its filename opens the whole cited document, scrolled to the
+  first match — an excerpt alone cannot tell you whether the answer read it right.
+  URLs inside a passage are clickable (`http(s)` only).
 - **Prompt-injection fence**: retrieved text is wrapped in `<source id="S#">`
   blocks marked as untrusted data; tags inside a passage are neutralised.
 - **Free-tier resilience**: rotation over up to 5 Groq keys, waiting for the
@@ -117,7 +121,7 @@ With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **247 tests, fully offline** (fake embedder, all HTTP mocked).
+`python -m pytest -q` — **270 tests, fully offline** (fake embedder, all HTTP mocked).
 
 ## Limitations
 

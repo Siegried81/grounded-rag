@@ -55,10 +55,18 @@ then `docker compose --profile api up --build` and open http://localhost:8002.
 | GET | `/api/health` | Liveness check (`{"status": "ok"}`). |
 | GET | `/api/config[?corpus=NAME]` | Badges (LLM provider and model, embedding provider, default retrieval mode, refusal threshold, grounding bar), `llm_key_configured` (a boolean only, never a key), pipeline steps and limitations. |
 | GET | `/api/corpora` | Indexed corpora with documents, chunks, PDF pages, detected languages, file list, available modes and 4 example questions. |
+| GET | `/api/document?corpus=NAME&source=FILE[&q=QUESTION]` | One cited document in full, so a citation can be read in context: `{corpus, source, chars, shown_chars, truncated, text_html}`. `q` only decides which words are marked. |
 | POST | `/api/ask` | `{corpus, question, mode?, top_k?, use_mmr?}` -> answer, refusal, sources, verification, latency and error. |
 
 `/api/config` and `/api/corpora` work without any LLM key or a running Ollama:
-they load the indexes but never embed or call a model.
+they load the indexes but never embed or call a model. `/api/document` needs no
+model either.
+
+`source` is matched against the corpus's indexed file list
+(`rag.ingest.document_paths`) instead of being joined onto a path, so a crafted
+name (`../.env`, an absolute path, a file of another corpus, a README or a
+subfolder the indexer skips) returns 404 rather than a file. Documents longer
+than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 
 `POST /api/ask` response fields:
 
@@ -67,7 +75,8 @@ they load the indexes but never embed or call a model.
   gate is the dense cosine threshold from `SCORE_THRESHOLD`; it is not a request
   parameter because changing it changes what a refusal means.
 - `sources[]`: `{sid, source, page, location, score, excerpt, excerpt_html, cited}`.
-  `excerpt_html` is HTML-escaped server-side and only adds `<mark>` tags.
+  `excerpt_html` is HTML-escaped server-side and only adds `<mark>` tags and
+  `<a>` links on bare `http(s)` URLs (`target="_blank" rel="noopener noreferrer"`).
 - `verification`: `{ok, grounding_score, min_grounding, valid_citations,
   invalid_citations, uncited_sentences, explanation}`.
 - `latency`: `{retrieval_s, answer_s}`.
@@ -87,7 +96,13 @@ they load the indexes but never embed or call a model.
   card and highlight it. A citation to a source that does not exist is struck
   through in red.
 - Source cards that are always visible, with file, page, score, a highlighted
-  excerpt, and an accent on the cited ones.
+  excerpt, and an accent on the cited ones. The filename is a link: it opens the
+  whole document in a dialog, scrolled to the first highlighted match, because an
+  excerpt is a window around the match and is not enough to check what a citation
+  actually says. Escape closes it. The Streamlit app offers the same document
+  behind an "Open ... in full" panel under each source.
+- Bare `http(s)` URLs in a passage or a document are clickable. Only those two
+  schemes are linked, so a passage cannot hand the reader a `javascript:` target.
 - A verification badge with its explanation, invalid citations and uncited claims.
 - A refusal panel with the best score against the threshold and the closest passages.
 - An error banner with the actionable hint, latency chips and a loading state.

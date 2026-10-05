@@ -31,6 +31,12 @@ export const getConfig = (corpus, uiLang) =>
 
 export const getCorpora = (uiLang) => request(withQuery("/api/corpora", { ui_lang: uiLang }));
 
+// One cited document in full, so a reader can check a citation in context.
+// `question` is passed as `q` only to highlight the same terms as the source
+// card; the document is the same whatever it is.
+export const getDocument = (corpus, source, question) =>
+  request(withQuery("/api/document", { corpus, source, q: question }));
+
 // /api/ask reads `ui_lang` from the JSON body (it localises the refusal and
 // verification explanations it builds), so it travels there, not in the query.
 export const ask = (body, uiLang) =>

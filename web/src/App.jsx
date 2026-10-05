@@ -98,7 +98,9 @@ export default function App() {
       const requestedLanguage = answerLang;
       setHistories((h) => ({
         ...h,
-        [c]: [...(h[c] || []), { id, question, status: "loading", requestedLanguage }],
+        // `corpus` is kept on the turn so its source cards can fetch the right
+        // document even after the reader switches corpus.
+        [c]: [...(h[c] || []), { id, question, corpus: c, status: "loading", requestedLanguage }],
       }));
       setBusy(true);
       try {
