@@ -620,7 +620,7 @@ a refusal or a grounding score means; both render what the pipeline produced.
 Every decision about *what to show* is a pure function, free of Streamlit and of
 any network call, so it is unit-tested offline and shared by both UIs:
 
-- `query_terms` / `highlight_terms` / `snippet` — Unicode-aware term extraction
+- `query_terms` / `highlight_terms` / `highlight_and_linkify` / `snippet` — Unicode-aware term extraction
   (French accents stay whole, EN+FR stopwords dropped), an HTML-escaped excerpt
   around the first match with `<mark>` tags. Escaping happens **before** marking,
   so passage text can never inject markup into the page.
@@ -645,7 +645,8 @@ config value.
 ### 10.3 React + FastAPI (`api/main.py`, `web/`)
 
 - **API** (`api/main.py`, FastAPI, port **8002**): `GET /api/health`,
-  `GET /api/config[?corpus=]`, `GET /api/corpora`, `POST /api/ask`. It mirrors
+  `GET /api/config[?corpus=]`, `GET /api/corpora`, `GET /api/document`,
+  `POST /api/ask`. It mirrors
   `app.py` call for call, with the same per-corpus caching (`lru_cache`) of the
   store, BM25 index and embedder. Embedding or LLM failures return **HTTP 200 with
   an `error` object and an actionable hint**, plus the passages already retrieved,
@@ -658,7 +659,10 @@ config value.
   the API routes so `/api/*` always wins.
 - **Web** (`web/`, Vite + React 18, plain CSS, no UI kit, dev server on port
   **5180**): clickable `[S#]` chips that scroll to and highlight their source
-  card, a verification badge, a refusal panel with the closest passages, latency
+  card, source filenames that open the whole cited document (`GET /api/document`)
+  scrolled to the first match — an excerpt is a window around the match, so
+  checking a citation needs its context —, a verification badge, a refusal panel
+  with the closest passages, latency
   chips, light/dark themes, visible focus rings and reduced motion. In dev, Vite
   proxies `/api` to `127.0.0.1:8002`, and the API allows CORS only from
   `localhost:5180`.
@@ -715,7 +719,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**247 tests, all offline**, run with:
+**270 tests, all offline**, run with:
 
 ```bash
 PYTHONPATH=. .venv/Scripts/python -m pytest -q -p no:cacheprovider
@@ -755,7 +759,11 @@ What the suites pin down, beyond per-module unit tests:
 - **API** (`test_api.py`, FastAPI `TestClient` with fake index, embedder and LLM):
   the answer and refusal paths (the latter with no LLM call), an invalid citation
   flagged, the 200-with-hint contract on LLM failure, 404 on an unknown corpus,
-  and no key value in `/api/config`.
+  and no key value in `/api/config`. For `/api/document`: the full text comes back
+  highlighted and escaped, long files are cut and say so, and a `source` that is
+  not an indexed file of that corpus (`../secret.txt`, an absolute path, a
+  README, an unsupported suffix, a subfolder, another corpus's file) is 404 with
+  no content leaked.
 - **UI helpers** (`test_ui_helpers.py`): escaping before highlighting, citation
   badges, refusal and error explanations.
 

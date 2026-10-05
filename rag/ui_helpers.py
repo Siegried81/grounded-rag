@@ -15,6 +15,12 @@ import re
 from pathlib import Path
 
 _CITATION_RE = re.compile(r"\[S(\d+)\]")
+# Bare URLs in passage text. Quotes and angle brackets end the match so a URL
+# written inside markup or a quotation does not swallow what follows it.
+_URL_RE = re.compile(r"https?://[^\s<>\"'()\[\]]+")
+# Punctuation that ends a sentence rather than the URL. Stripped from the right
+# so "see http://x.eu/page." links to the page, not to "page.".
+_URL_TRAILING_PUNCT = ".,;:!?"
 # Unicode-aware word pattern so accented French terms ("santé") stay whole.
 _WORD_RE = re.compile(r"\w+", re.UNICODE)
 _MIN_TERM_LEN = 3  # shorter tokens ("de", "of", "AI") would light up half the text
@@ -118,6 +124,31 @@ def highlight_terms(text: str, terms: list[str]) -> str:
         re.IGNORECASE,
     )
     return pattern.sub(r"<mark>\1</mark>", escaped)
+
+
+def highlight_and_linkify(text: str, terms: list[str]) -> str:
+    """Like `highlight_terms`, but also turn bare http(s) URLs into real links.
+
+    A document that cites a regulation or a filing often names its source as a
+    URL; being able to follow it is part of checking a passage. URLs are matched
+    on the raw text and escaped separately, so the href never carries a <mark>
+    tag and the surrounding prose is still escaped and highlighted by
+    `highlight_terms`. Only `http://` and `https://` are matched, so no
+    `javascript:` or `data:` target can be produced, and quotes are escaped so a
+    crafted URL cannot break out of the attribute.
+    """
+    out: list[str] = []
+    pos = 0
+    for m in _URL_RE.finditer(text):
+        url = m.group(0).rstrip(_URL_TRAILING_PUNCT)
+        out.append(highlight_terms(text[pos:m.start()], terms))
+        escaped = html.escape(url, quote=True)
+        out.append(
+            f'<a href="{escaped}" target="_blank" rel="noopener noreferrer">{escaped}</a>'
+        )
+        pos = m.start() + len(url)
+    out.append(highlight_terms(text[pos:], terms))
+    return "".join(out)
 
 
 def snippet(text: str, terms: list[str], max_chars: int = 420) -> str:

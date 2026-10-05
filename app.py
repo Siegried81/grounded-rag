@@ -21,6 +21,7 @@ import config
 from rag import ui_helpers as ui
 from rag.answer import answer_question
 from rag.embed import get_embedder
+from rag.ingest import document_paths, read_document
 from rag.lexical import BM25Index
 from rag.retrieve import retrieve
 from rag.store import VectorStore
@@ -47,6 +48,14 @@ span.cite-bad { display:inline-block; padding:0 6px; border-radius:6px; font-siz
 .src .meta { font-size:0.75rem; opacity:0.7; }
 .src .body { font-size:0.85rem; opacity:0.9; }
 .src mark { background:rgba(255,200,0,0.35); color:inherit; padding:0 1px; border-radius:2px; }
+/* Full document behind a source: shown verbatim (pre-wrap) so what is on screen
+   is exactly the indexed file, with the same highlighting as the snippet. */
+.doc { font-size:0.85rem; line-height:1.5; white-space:pre-wrap; overflow-wrap:anywhere;
+  max-height:60vh; overflow-y:auto; padding:8px 10px; border-radius:6px;
+  border:1px solid rgba(128,128,128,0.35); background:rgba(128,128,128,0.06); }
+.doc mark { background:rgba(255,200,0,0.35); color:inherit; padding:0 1px; border-radius:2px; }
+/* URLs inside a passage or a document are real links (see ui.highlight_and_linkify). */
+.src .body a, .doc a { color:rgb(255,98,0); overflow-wrap:anywhere; }
 .refusal { border:1px solid rgba(128,128,128,0.45); border-left:4px solid rgba(120,120,120,0.9);
   border-radius:6px; padding:10px 14px; background:rgba(128,128,128,0.08); }
 </style>
@@ -82,6 +91,20 @@ def load_stats(corpus: str) -> dict:
     """
     store, _, _ = load_resources(corpus)
     return ui.corpus_stats(store._chunks)
+
+
+@st.cache_data
+def load_document(corpus: str, source: str) -> str | None:
+    """Full text of one document of a corpus, or None if it is not an indexed file.
+
+    Cached because every rerun re-renders the expanders holding these documents.
+    Resolved through `ingest.document_paths` rather than by joining the name onto
+    a path, so only a file the indexer actually read can be opened.
+    """
+    for path in document_paths(corpus):
+        if path.name == source:
+            return read_document(path)
+    return None
 
 
 def llm_model_name() -> str:
@@ -179,14 +202,39 @@ def render_sidebar(corpora: list[str]) -> tuple[str, dict]:
     return corpus, {"mode": mode, "top_k": top_k, "use_mmr": use_mmr, "language": language}
 
 
+def render_document_expander(corpus: str, source: str, terms: list[str]) -> None:
+    """Collapsed panel holding the whole document a passage came from.
+
+    The document is HTML-escaped by `ui.highlight_and_linkify` before the <mark>
+    tags and http(s) links are added, so injecting it as HTML cannot put markup on
+    the page. A document
+    that is no longer on disk (corpus folder changed since indexing) says so
+    instead of failing the whole turn.
+    """
+    with st.expander(f"Open {source} in full"):
+        text = load_document(corpus, source)
+        if text is None:
+            st.caption(f"{source} is no longer in the {corpus} corpus folder.")
+            return
+        st.markdown(
+            f'<div class="doc">{ui.highlight_and_linkify(text, terms)}</div>',
+            unsafe_allow_html=True,
+        )
+
+
 def render_sources(sources, question: str, cited: list[int], title: str) -> None:
-    """List every passage with location, score, highlighted snippet and cited flag."""
+    """List every passage with location, score, highlighted snippet and cited flag.
+
+    Each passage also opens the document it came from: a snippet is a window
+    around the match, which is not enough to check that a citation says what the
+    answer claims.
+    """
     terms = ui.query_terms(question)
     st.markdown(f"**{title}**")
     for i, r in enumerate(sources, 1):
         is_cited = i in cited
         flag = " · cited" if is_cited else ""
-        body = ui.highlight_terms(ui.snippet(r.chunk.text, terms), terms)
+        body = ui.highlight_and_linkify(ui.snippet(r.chunk.text, terms), terms)
         st.markdown(
             f'<div class="src{" cited" if is_cited else ""}">'
             f'<div class="head">[S{i}] {html.escape(ui.format_location(r.chunk.source, r.chunk.meta))}</div>'
@@ -194,6 +242,7 @@ def render_sources(sources, question: str, cited: list[int], title: str) -> None
             f'<div class="body">{body}</div></div>',
             unsafe_allow_html=True,
         )
+        render_document_expander(r.chunk.corpus, r.chunk.source, terms)
     st.caption(
         "Score = cosine similarity to the question (1.0 = identical). In hybrid mode a "
         "passage found only by keywords shows its BM25 score instead."

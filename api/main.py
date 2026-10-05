@@ -31,6 +31,7 @@ import config
 from rag import ui_helpers as ui
 from rag.answer import answer_question
 from rag.embed import get_embedder
+from rag.ingest import document_paths, read_document
 from rag.lexical import BM25Index
 from rag.retrieve import retrieve
 from rag.store import VectorStore
@@ -44,6 +45,9 @@ WEB_DIST = config.ROOT / "web" / "dist"
 # limitations, pipeline steps); see config.SUPPORTED_UI_LANGUAGES.
 UiLang = Literal["en", "fr"]
 AnswerLang = Literal["auto", "en", "fr", "nl"]
+# Cap on what /api/document sends back. The shipped corpora top out around 70 kB,
+# so this only bites if someone drops a very large file into a corpus folder.
+MAX_DOCUMENT_CHARS = 400_000
 # The Vite dev server; in production the UI is served by this same app, so no
 # other origin needs to be allowed.
 DEV_ORIGINS = ["http://localhost:5180", "http://127.0.0.1:5180"]
@@ -127,8 +131,9 @@ def _require_corpus(corpus: str) -> None:
 def _source_dict(index: int, r, terms: list[str], cited: list[int]) -> dict:
     """One passage as JSON: label, score, plain + highlighted excerpt, cited flag.
 
-    `excerpt_html` comes from `ui.highlight_terms`, which escapes the passage
-    before adding <mark> tags, so it is safe to inject as HTML in the browser.
+    `excerpt_html` comes from `ui.highlight_and_linkify`, which escapes the passage
+    before adding <mark> tags and http(s) links, so it is safe to inject as HTML in
+    the browser.
     """
     excerpt = ui.snippet(r.chunk.text, terms)
     return {
@@ -138,7 +143,7 @@ def _source_dict(index: int, r, terms: list[str], cited: list[int]) -> dict:
         "location": ui.format_location(r.chunk.source, r.chunk.meta),
         "score": round(float(r.score), 4),
         "excerpt": excerpt,
-        "excerpt_html": ui.highlight_terms(excerpt, terms),
+        "excerpt_html": ui.highlight_and_linkify(excerpt, terms),
         "cited": index in cited,
     }
 
@@ -147,6 +152,21 @@ def _sources(results, question: str, cited: list[int]) -> list[dict]:
     """Serialise a ranked list of passages, numbered S1..Sn like the prompt."""
     terms = ui.query_terms(question)
     return [_source_dict(i, r, terms, cited) for i, r in enumerate(results, 1)]
+
+
+def _resolve_document(corpus: str, source: str):
+    """Map a citation's filename back to the document on disk, or raise 404.
+
+    The name is compared against the corpus listing instead of being joined onto
+    a path, so a crafted `source` ("../.env", an absolute path, a file in a
+    sibling corpus) resolves to nothing rather than to a file outside the corpus.
+    Matching `ingest.document_paths` also means only indexed files can be opened.
+    """
+    _require_corpus(corpus)
+    for path in document_paths(corpus):
+        if path.name == source:
+            return path
+    raise HTTPException(status_code=404, detail=f"Unknown source: {source!r}")
 
 
 # --- Routes -----------------------------------------------------------------------
@@ -226,6 +246,38 @@ def get_corpora(ui_lang: UiLang = Query(default="en")) -> dict:
             "examples_by_language": by_lang,
         })
     return {"corpora": items}
+
+
+@app.get("/api/document")
+def get_document(
+    corpus: str = Query(min_length=1),
+    source: str = Query(min_length=1),
+    q: str = Query(default="", max_length=2000),
+) -> dict:
+    """Return one cited document in full, with the question's terms highlighted.
+
+    A source card only shows a window around the match (`ui.snippet`), which is
+    not enough to check a citation: this is what lets the reader open the file the
+    passage came from and read around it. `q` is the question, so the same words
+    are marked here as on the card and the UI can scroll to the first match; it
+    is optional because a document can be opened without one.
+
+    `text_html` is escaped by `ui.highlight_and_linkify` before any <mark> or link
+    is added, so
+    a document can never inject markup into the page. Long documents are cut at
+    `MAX_DOCUMENT_CHARS` and say so, rather than sending megabytes to the browser.
+    """
+    path = _resolve_document(corpus, source)
+    text = read_document(path)
+    shown = text[:MAX_DOCUMENT_CHARS]
+    return {
+        "corpus": corpus,
+        "source": source,
+        "chars": len(text),
+        "shown_chars": len(shown),
+        "truncated": len(shown) < len(text),
+        "text_html": ui.highlight_and_linkify(shown, ui.query_terms(q)),
+    }
 
 
 class AskRequest(BaseModel):

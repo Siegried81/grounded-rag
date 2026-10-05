@@ -32,6 +32,60 @@ def test_highlight_terms_without_terms_only_escapes():
     assert ui.highlight_terms("a < b", []) == "a &lt; b"
 
 
+# --- highlight_and_linkify ------------------------------------------------------
+# What the two UIs actually render for a passage or a document: the same escaping
+# and <mark> tags as highlight_terms, plus real links on bare URLs so a passage
+# that names its source can be followed.
+
+
+def test_linkify_makes_bare_url_a_link_and_still_highlights():
+    out = ui.highlight_and_linkify("Risk rules at https://eur-lex.europa.eu/ai", ["risk"])
+    assert "<mark>Risk</mark> rules at " in out
+    assert '<a href="https://eur-lex.europa.eu/ai" target="_blank" rel="noopener noreferrer">' in out
+    assert out.endswith("https://eur-lex.europa.eu/ai</a>")
+
+
+def test_linkify_leaves_text_without_url_identical_to_highlight_terms():
+    text = "Risk tiers and <b>obligations</b>"
+    assert ui.highlight_and_linkify(text, ["risk"]) == ui.highlight_terms(text, ["risk"])
+
+
+def test_linkify_drops_sentence_punctuation_from_the_url():
+    out = ui.highlight_and_linkify("See http://x.eu/page. Next.", [])
+    assert '<a href="http://x.eu/page"' in out
+    assert out.endswith("http://x.eu/page</a>. Next.")
+
+
+def test_linkify_never_marks_inside_an_href():
+    """A query term appearing in the URL must not put a <mark> tag in the href."""
+    out = ui.highlight_and_linkify("https://europa.eu/risk-tiers", ["risk"])
+    assert "<mark>" not in out
+    assert out == (
+        '<a href="https://europa.eu/risk-tiers" target="_blank" '
+        'rel="noopener noreferrer">https://europa.eu/risk-tiers</a>'
+    )
+
+
+def test_linkify_only_links_http_schemes():
+    """javascript:, data: and file: are not linked, so no passage can hand the
+    reader a scripted target; they are escaped as plain text."""
+    text = "javascript:alert(1) data:text/html,x file:///etc/passwd ftp://h/x"
+    out = ui.highlight_and_linkify(text, [])
+    assert "<a " not in out and out == text
+
+
+def test_linkify_escapes_quotes_so_a_url_cannot_break_out_of_the_attribute():
+    out = ui.highlight_and_linkify('http://x.eu/a"onmouseover=alert(1)', [])
+    assert '"onmouseover' not in out
+    assert "&quot;onmouseover" in out
+
+
+def test_linkify_handles_several_urls_and_escapes_between_them():
+    out = ui.highlight_and_linkify("http://a.eu <b> http://b.eu", [])
+    assert out.count("<a href=") == 2
+    assert "&lt;b&gt;" in out
+
+
 def test_snippet_short_text_unchanged_and_whitespace_collapsed():
     assert ui.snippet("one  two\nthree", ["two"]) == "one two three"
 
