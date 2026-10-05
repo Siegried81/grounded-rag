@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from rag.answer import REFUSAL_MESSAGE
+from rag.answer import REFUSAL_MESSAGE, REFUSAL_MESSAGES
 from rag.answer_metrics import (
     JUDGE_SYSTEM,
     build_judge_prompt,
@@ -55,6 +55,18 @@ def test_extract_numbers_scale_and_percent():
     assert (27.0, 1.0, False) in nums and (2025.0, 1.0, False) in nums
 
 
+def test_digits_glued_to_a_letter_are_not_numbers():
+    """Citation markers and labels like Q3 must not satisfy a numeric fact."""
+    assert extract_numbers("[S3]") == []
+    assert extract_numbers("See [S1] and [S12].") == []
+    assert extract_numbers("Q3 results, H1 guidance") == []
+    assert not key_fact_present("3", "as stated in [S3]")
+    # Currency signs, spaces and operators before a digit still start a number.
+    nums = extract_numbers("€500, $2.4 billion and k=5")
+    assert (500.0, 1.0, False) in nums and (2.4, 1e9, False) in nums
+    assert (5.0, 1.0, False) in nums
+
+
 @pytest.mark.parametrize("answer", [
     "about 166,000 employees", "about 166 000 employees", "about 166000 employees",
     "about 166 000 employees", "about 167,000 employees",  # within 1%
@@ -74,6 +86,15 @@ def test_numeric_fact_scales():
     assert key_fact_present("$416,161 million", "Total net sales $ 416,161 (in millions).")
     assert key_fact_present("€500 million", "a fine of 500 million euros")
     assert not key_fact_present("€500 million", "a fine of 5 billion euros")
+
+
+def test_scale_word_in_answer_must_match_after_scaling():
+    """The unscaled figure only counts when the answer's number has no scale word."""
+    assert not key_fact_present("€500 million", "a fine of 500 billion euros")
+    assert not key_fact_present("$590 million", "revenue of $590 billion")
+    assert key_fact_present("€500 million", "a fine of 500 (in millions of euros)")
+    assert key_fact_present("€500 million", "EUR 500")
+    assert key_fact_present("€500 million", "0.5 billion euros")
 
 
 def test_percent_fact_needs_a_percent():
@@ -111,14 +132,23 @@ def test_refusal_gate_and_exact_message():
     assert is_refusal("")
 
 
+@pytest.mark.parametrize("lang", sorted(REFUSAL_MESSAGES))
+def test_exact_refusal_message_in_any_language(lang):
+    assert is_refusal(REFUSAL_MESSAGES[lang])
+    assert is_refusal(f"  {REFUSAL_MESSAGES[lang]}\n")
+
+
 @pytest.mark.parametrize("text", [
     "I do not know based on the provided sources.",
     "I don't know.",
     "The sources do not mention Apple's net income.",
     "Je ne sais pas.",
-    "Les sources fournies ne précisent pas le montant des amendes [S2].",
+    "Les sources fournies ne précisent pas le montant des amendes.",
     "Les sources sont insuffisantes pour répondre.",
     "Based on the context, it is not stated. The documents do not specify a figure.",
+    "No lo sé.",
+    "No puedo responder a esa pregunta con las fuentes dadas.",
+    "No tengo información sobre eso.",
 ])
 def test_model_worded_refusals(text):
     assert is_refusal(text)
@@ -130,6 +160,12 @@ def test_model_worded_refusals(text):
     "Le report vise les systèmes Annexe III [S1]. Les sources ne précisent pas le reste.",
     # A negation about the subject (not the sources) is content, not a refusal.
     "Spam filters fall under minimal risk and the AI Act does not mention specific duties [S1].",
+    # A hedge in the first sentence followed by a cited claim is an answer: on an
+    # unanswerable question it must be scored as a hallucination, not a refusal.
+    "Je ne sais pas exactement, mais l'amende est de 35 millions [S1].",
+    "I don't know for sure, but the fine is 35 million [S1].",
+    # Even a refusal-worded sentence is a claim once it cites a source.
+    "Les sources fournies ne précisent pas le montant des amendes [S2].",
 ])
 def test_answers_are_not_refusals(text):
     assert not is_refusal(text)
@@ -137,6 +173,14 @@ def test_answers_are_not_refusals(text):
 
 def test_uncited_answer_with_later_refusal_phrase_is_a_refusal():
     assert is_refusal("Apple discloses many risks. The sources do not mention the figure.")
+
+
+def test_cited_hedge_counts_as_answered_on_unanswerable_question():
+    item = {"id": "u-01", "answerable": False, "key_facts": []}
+    text = "Je ne sais pas exactement, mais l'amende est de 35 millions [S1]."
+    row = score_answer(item, text, False, SOURCES)
+    assert row["refused"] is False and row["valid_citations"] == [1]
+    assert refusal_metrics([row])["refusal_recall"] == 0.0
 
 
 # --- refusal metrics -------------------------------------------------------------
