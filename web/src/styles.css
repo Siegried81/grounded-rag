@@ -260,7 +260,42 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 }
 .src-body { margin: 0; font-size: 0.86rem; color: var(--text); opacity: 0.92; overflow-wrap: anywhere; }
 .src-body mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+/* URLs inside a passage or a document are real links (see ui.highlight_and_linkify). */
+.src-body a, .doc-body a { color: var(--accent); text-underline-offset: 2px; overflow-wrap: anywhere; }
 .sources .caption { margin-top: 6px; }
+
+/* The filename is a link to the whole document: an excerpt alone cannot be
+   checked, so reading it in context is one click away. */
+.src-link {
+  font: inherit; font-weight: 600; color: var(--accent); background: none; border: 0;
+  padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.src-link:hover { text-decoration-thickness: 2px; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 30; background: rgba(0, 0, 0, 0.45);
+  display: grid; place-items: center; padding: 24px;
+}
+.doc-modal {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 10px 40px rgba(16, 24, 40, 0.3); padding: 16px 18px;
+  width: min(900px, 100%); max-height: min(80vh, 100%); display: flex; flex-direction: column; gap: 6px;
+}
+.doc-head { display: flex; align-items: baseline; gap: 10px; }
+.doc-title { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.doc-meta { color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.doc-close {
+  margin-left: auto; font: inherit; font-size: 0.85rem; cursor: pointer;
+  background: var(--surface-2); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; padding: 4px 12px;
+}
+.doc-body {
+  margin: 0; overflow: auto; flex: 1; white-space: pre-wrap; overflow-wrap: anywhere;
+  font-family: inherit; font-size: 0.88rem; line-height: 1.55;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px;
+}
+.doc-body mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
 
 .verify { border-radius: 10px; padding: 10px 12px; border: 1px solid; }
 .verify.ok { background: var(--ok-soft); border-color: var(--ok); }

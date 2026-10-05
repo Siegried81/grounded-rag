@@ -31,6 +31,12 @@ export const getConfig = (corpus, uiLang) =>
 
 export const getCorpora = (uiLang) => request(withQuery("/api/corpora", { ui_lang: uiLang }));
 
+// One cited document in full, so a reader can check a citation in context.
+// `question` is passed as `q` only to highlight the same terms as the source
+// card; the document is the same whatever it is.
+export const getDocument = (corpus, source, question) =>
+  request(withQuery("/api/document", { corpus, source, q: question }));
+
 // Upper bound on one /api/ask round trip. Free-tier LLM calls can take a
 // minute or two under rate limiting, but a request that never returns would
 // otherwise keep the UI locked (busy) forever.

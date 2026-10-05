@@ -289,3 +289,111 @@ def test_ask_ui_lang_localizes_explanations(setup, client, monkeypatch):
     setup["store"] = FakeStore([_r(1, 0.1)])
     body = client.post("/api/ask", json={"corpus": "demo", "question": "weather?", "ui_lang": "fr"}).json()
     assert body["refused"] and "seuil" in body["refusal"]["explanation"]
+
+
+# --- GET /api/document ----------------------------------------------------------
+# The source cards link to the whole file a passage came from, because an excerpt
+# alone cannot be checked. The filename comes back from the server inside an
+# answer, so these tests pin down that it can only ever resolve to an indexed
+# file of the named corpus.
+
+
+@pytest.fixture
+def corpus_files(setup, monkeypatch, tmp_path):
+    """Give the fake "demo" corpus a real folder on disk and return it."""
+    folder = tmp_path / "data" / "demo"
+    folder.mkdir(parents=True)
+    monkeypatch.setattr(config, "corpus_dir", lambda name: tmp_path / "data" / name)
+    return folder
+
+
+def test_document_returns_full_text_with_highlights(corpus_files, client):
+    (corpus_files / "doc1.txt").write_text(
+        "Logs must be kept.\nDocumentation too.", encoding="utf-8"
+    )
+    body = client.get(
+        "/api/document", params={"corpus": "demo", "source": "doc1.txt", "q": "which logs?"}
+    ).json()
+    assert body["source"] == "doc1.txt" and body["corpus"] == "demo"
+    assert body["chars"] == 37 and body["shown_chars"] == 37 and body["truncated"] is False
+    # The query term is marked; the rest of the document is returned intact.
+    assert "<mark>Logs</mark> must be kept." in body["text_html"]
+    assert "Documentation too." in body["text_html"]
+
+
+def test_document_without_question_has_no_marks(corpus_files, client):
+    (corpus_files / "doc1.txt").write_text("Logs must be kept.", encoding="utf-8")
+    body = client.get("/api/document", params={"corpus": "demo", "source": "doc1.txt"}).json()
+    assert body["text_html"] == "Logs must be kept."
+
+
+def test_document_escapes_markup(corpus_files, client):
+    """The browser injects text_html as HTML, so the document must not be able to."""
+    (corpus_files / "doc1.txt").write_text("<script>alert('x')</script> logs", encoding="utf-8")
+    body = client.get(
+        "/api/document", params={"corpus": "demo", "source": "doc1.txt", "q": "logs"}
+    ).json()
+    assert "<script>" not in body["text_html"]
+    assert "&lt;script&gt;" in body["text_html"]
+
+
+def test_document_truncates_long_file(corpus_files, client, monkeypatch):
+    monkeypatch.setattr(api, "MAX_DOCUMENT_CHARS", 10)
+    (corpus_files / "doc1.txt").write_text("x" * 50, encoding="utf-8")
+    body = client.get("/api/document", params={"corpus": "demo", "source": "doc1.txt"}).json()
+    assert body["chars"] == 50 and body["shown_chars"] == 10 and body["truncated"] is True
+    assert body["text_html"] == "x" * 10
+
+
+@pytest.mark.parametrize("source", [
+    "nope.txt",
+    "../secret.txt",          # path traversal out of the corpus
+    "/etc/passwd",
+    "README.md",              # present but never indexed
+    "notes.csv",              # present but an unsupported suffix
+    "raw/dump.txt",           # present but in a subfolder, so not indexed
+])
+def test_document_only_serves_indexed_files(corpus_files, client, source):
+    (corpus_files / "doc1.txt").write_text("logs", encoding="utf-8")
+    (corpus_files / "README.md").write_text("about", encoding="utf-8")
+    (corpus_files / "notes.csv").write_text("x,y", encoding="utf-8")
+    (corpus_files / "raw").mkdir()
+    (corpus_files / "raw" / "dump.txt").write_text("raw", encoding="utf-8")
+    (corpus_files.parent / "secret.txt").write_text("CLASSIFIED", encoding="utf-8")
+
+    resp = client.get("/api/document", params={"corpus": "demo", "source": source})
+    assert resp.status_code == 404
+    # The 404 detail echoes the name the client asked for; no file content leaks.
+    assert "CLASSIFIED" not in resp.text
+
+
+def test_document_unknown_corpus_is_404(corpus_files, client):
+    (corpus_files / "doc1.txt").write_text("logs", encoding="utf-8")
+    resp = client.get("/api/document", params={"corpus": "nope", "source": "doc1.txt"})
+    assert resp.status_code == 404
+
+
+def test_document_requires_corpus_and_source(setup, client):
+    assert client.get("/api/document", params={"corpus": "demo"}).status_code == 422
+    assert client.get("/api/document", params={"source": "doc1.txt"}).status_code == 422
+
+
+def test_document_links_bare_urls(corpus_files, client):
+    """Both `text_html` and `excerpt_html` carry real links, so a passage naming
+    its source as a URL can be followed from either UI."""
+    (corpus_files / "doc1.txt").write_text(
+        "Logs: see https://eur-lex.europa.eu/ai for the text.", encoding="utf-8"
+    )
+    body = client.get(
+        "/api/document", params={"corpus": "demo", "source": "doc1.txt", "q": "logs"}
+    ).json()
+    assert '<a href="https://eur-lex.europa.eu/ai"' in body["text_html"]
+    assert 'rel="noopener noreferrer"' in body["text_html"]
+    assert "<mark>Logs</mark>" in body["text_html"]
+
+
+def test_ask_sources_link_bare_urls(setup, client, monkeypatch):
+    setup["store"] = FakeStore([_r(1, 0.9, text="Logs at https://europa.eu/ai are required.")])
+    monkeypatch.setattr(rag.llm, "complete", lambda prompt, system=None: "Logs [S1].")
+    body = client.post("/api/ask", json={"corpus": "demo", "question": "logs?"}).json()
+    assert '<a href="https://europa.eu/ai"' in body["sources"][0]["excerpt_html"]
