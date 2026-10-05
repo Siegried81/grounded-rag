@@ -174,6 +174,29 @@ def test_ask_llm_failure_returns_hint_not_500(setup, client, monkeypatch):
     assert body["answer"] is None and body["verification"] is None
 
 
+def test_ask_index_mismatch_is_an_index_error_not_an_embedding_one(setup, client, monkeypatch):
+    setup["store"].model = "nomic-embed-text"  # the fake embedder reports model "fake"
+    monkeypatch.setattr(rag.llm, "complete", lambda *a, **k: pytest.fail("LLM must not run"))
+    resp = client.post("/api/ask", json={"corpus": "demo", "question": "logs?"})
+    assert resp.status_code == 200
+    err = resp.json()["error"]
+    assert err["kind"] == "index" and "re-run ingestion" in err["hint"]
+    assert "nomic-embed-text" in err["hint"] and "fake" in err["hint"]
+
+
+def test_verification_failure_is_not_reported_as_an_llm_outage(setup, client, monkeypatch):
+    # verify_answer is offline code: a bug there must surface, not be dressed up
+    # as "no language model could be reached" with an API-key hint.
+    monkeypatch.setattr(rag.llm, "complete", lambda prompt, system=None: "Logs are kept [S1].")
+
+    def broken(*a, **k):
+        raise RuntimeError("verify bug")
+
+    monkeypatch.setattr(api, "verify_answer", broken)
+    with pytest.raises(RuntimeError, match="verify bug"):
+        client.post("/api/ask", json={"corpus": "demo", "question": "logs?"})
+
+
 def test_ask_embedding_failure_returns_hint(setup, client, monkeypatch):
     setup["embedder"] = FakeEmbedder(fail=True)
     monkeypatch.setattr(config, "EMBED_PROVIDER", "ollama")

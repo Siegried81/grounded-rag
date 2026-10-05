@@ -4,6 +4,14 @@ Turns "cite-or-refuse" from a claim into something checkable: it validates that
 every [S#] marker points at a real source, flags claim-like sentences with no
 citation, and computes a cheap lexical grounding score. No LLM call is made, so
 it can run on every answer and in tests at zero cost.
+
+Grounding compares SURFACE words: the answer's content words (accented letters
+kept, English/French/Dutch function words dropped) are looked up in the cited
+sources' text. An answer written in another language than its sources therefore
+still scores lower than the same answer in the sources' language: numbers and
+proper names match across languages, ordinary vocabulary does not. The French
+and Dutch stopwords only stop penalising French/Dutch FUNCTION words, which used
+to count as ungrounded content and could push a correct French answer to 0.00.
 """
 
 import re
@@ -13,16 +21,47 @@ from rag.answer import REFUSAL_MESSAGE_SET, normalize_citations
 from rag.types import Retrieved
 
 _CITATION_RE = re.compile(r"\[S(\d+)\]")
-_WORD_RE = re.compile(r"[a-z0-9]+(?:'[a-z]+)?")
+# Runs of Unicode letters or digits (no underscore). Accented letters are words,
+# and apostrophes split ("l'amende" -> "l", "amende"; "don't" -> "don", "t"), so
+# French elisions are tokenised the same way whether the apostrophe is straight
+# or typographic. Measurement change: tokens with accents used to be cut into
+# fragments ("amende" from "l'amende" was fine, but "été" became nothing).
+_WORD_RE = re.compile(r"[^\W_]+")
 # Split after ., ! or ? followed by whitespace, or on newlines.
 _SENTENCE_RE = re.compile(r"(?<=[.!?])\s+|\n+")
+# A fragment ending with an abbreviation ("U.S.", "e.g.", "Inc.", "art.") is not
+# a sentence end: it is glued back to the fragment that follows. Without this,
+# "in the U.S. District Court" became two "sentences", and an uncited claim was
+# counted twice. The list is small on purpose; an abbreviation missing from it
+# only over-splits, as before. The letter run may follow Markdown emphasis.
+_ABBREV_END_RE = re.compile(
+    r"(?:(?:^|[\s(\[\"'“«*_])(?:[A-Za-z]\.)+"
+    r"|\b(?:etc|inc|corp|ltd|no|nos|art|arts|vs|mr|mrs|ms|dr|st|fig|figs|p|pp|cf|al|approx"
+    r"|env|ex|mme|mlle)\.)$",
+    re.IGNORECASE,
+)
 _MIN_CLAIM_WORDS = 4  # a sentence needs MORE than this many content words to count as a claim
 
+# Function words of the three answer languages (articles, prepositions, pronouns,
+# auxiliaries) plus the one-letter leftovers of apostrophe splitting (l', d',
+# qu', it's, don't). They carry no claim, so they count neither as answer content
+# nor as source content when computing the grounding score.
 _STOPWORDS = frozenset(
+    # English
     "a an the and or but of to in on at by for with from as is are was were be been being "
     "it its this that these those which who whom what when where how not no do does did "
     "has have had can could will would should may might also than then there their they "
-    "he she we you i his her our your into about over under so if".split()
+    "he she we you i his her our your into about over under so if "
+    # French
+    "le la les un une des du de d l et ou mais ne pas que qui quoi dont dans sur pour "
+    "par avec sans est sont été être a ont ce cet cette ces il elle ils elles nous vous "
+    "on se son sa ses leur leurs au aux y en lui me te toi moi même plus très ainsi "
+    "donc car comme si lorsque c j m n qu s t "
+    # Dutch
+    "het een of maar van op voor met is zijn was waren wordt worden werd niet geen dat "
+    "die deze dit er ook zij hij wij je u ik ze we men aan bij uit om tot als dan nog "
+    "wel al naar door over onder hun haar zijn mijn jouw uw ons onze te heeft hebben had "
+    "hadden kan kunnen zal zullen zou zouden moet moeten".split()
 )
 
 
@@ -45,11 +84,23 @@ def extract_citations(text: str) -> list[int]:
 def split_sentences(text: str) -> list[str]:
     """Split text into sentences with a pragmatic heuristic.
 
-    Breaks after '.', '!' or '?' followed by whitespace, and on newlines. It is not
-    linguistically perfect (abbreviations may over-split) but is dependency-free and
-    deterministic, which is enough for flagging uncited claims.
+    Breaks after '.', '!' or '?' followed by whitespace, and on newlines, then
+    glues back a fragment that ended with a known abbreviation (_ABBREV_END_RE).
+    It is not linguistically perfect (an unknown abbreviation still over-splits)
+    but is dependency-free and deterministic, which is enough for flagging
+    uncited claims. Measurement note: fewer false splits means fewer, longer
+    sentences, so `uncited_sentences` counts can be lower than before.
     """
-    return [s.strip() for s in _SENTENCE_RE.split(text) if s and s.strip()]
+    out: list[str] = []
+    for part in _SENTENCE_RE.split(text):
+        if not part or not part.strip():
+            continue
+        part = part.strip()
+        if out and _ABBREV_END_RE.search(out[-1]):
+            out[-1] = f"{out[-1]} {part}"
+        else:
+            out.append(part)
+    return out
 
 
 def _content_words(text: str) -> list[str]:
@@ -66,7 +117,13 @@ class VerificationReport:
     invalid_citations: list[int] = field(default_factory=list)
     uncited_sentences: list[str] = field(default_factory=list)
     grounding_score: float = 0.0
+    # ok: no hallucinated citation and grounding above the threshold. Unchanged
+    # so callers that gate on it (the API, the UI) keep their behaviour.
     ok: bool = False
+    # strict_ok: ok AND no claim-like sentence left without a citation. Stricter
+    # reading of cite-or-refuse for evaluations; an uncited claim does not make an
+    # answer ungrounded, but it is not fully "cited".
+    strict_ok: bool = False
 
 
 def verify_answer(
@@ -82,10 +139,15 @@ def verify_answer(
     return it in, is accepted as fully ok since it asserts nothing.
     Alternative citation markers ("【S1】") are normalised first, so uncited-sentence
     detection and grounding see the same citations as extract_citations.
+
+    Measurement note: content words are Unicode-aware and French/Dutch function
+    words are stopwords (see the module docstring), so French and Dutch answers
+    score higher than they did when only English function words were dropped.
+    `ok` keeps its definition; `strict_ok` additionally requires no uncited claim.
     """
     answer_text = normalize_citations(answer_text)
     if answer_text.strip() in REFUSAL_MESSAGE_SET:
-        return VerificationReport(grounding_score=1.0, ok=True)
+        return VerificationReport(grounding_score=1.0, ok=True, strict_ok=True)
 
     cited = extract_citations(answer_text)
     valid = [i for i in cited if 1 <= i <= len(sources)]
@@ -104,12 +166,14 @@ def verify_answer(
     else:
         score = 0.0
 
+    ok = not invalid and score >= min_grounding
     return VerificationReport(
         valid_citations=valid,
         invalid_citations=invalid,
         uncited_sentences=uncited,
         grounding_score=score,
-        ok=not invalid and score >= min_grounding,
+        ok=ok,
+        strict_ok=ok and not uncited,
     )
 
 

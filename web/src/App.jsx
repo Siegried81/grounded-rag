@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ask, getConfig, getCorpora } from "./api.js";
+import { ASK_TIMEOUT_MS, ask, getConfig, getCorpora } from "./api.js";
 import { useT } from "./i18n.js";
 import { Inline } from "./markdown.jsx";
 import Header from "./components/Header.jsx";
@@ -23,6 +23,9 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [loadError, setLoadError] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Last turn that finished ({ id, status }): drives the scroll to its answer
+  // and the screen-reader announcement, both of which happen once per turn.
+  const [finished, setFinished] = useState(null);
   const bottomRef = useRef(null);
   // Server defaults are applied once; later config fetches (corpus or UI
   // language change) must not overwrite what the user has chosen since.
@@ -39,9 +42,13 @@ export default function App() {
 
   // Corpus list, re-fetched when the UI language changes because example
   // questions and other descriptions are localized server-side.
+  // `live` discards a reply that lands after the effect was superseded, so
+  // a quick language switch cannot leave the older language on screen.
   useEffect(() => {
+    let live = true;
     getCorpora(uiLang)
       .then((data) => {
+        if (!live) return;
         corporaLoaded.current = true;
         setCorpora(data.corpora);
         setCorpus((c) =>
@@ -49,24 +56,34 @@ export default function App() {
         );
         // Without a corpus the config effect below never runs; fetch the
         // global config so the header and "no corpus" banner can render.
-        if (!data.corpora.length) return getConfig(null, uiLang).then(applyConfig);
+        if (!data.corpora.length) {
+          return getConfig(null, uiLang).then((cfg) => live && applyConfig(cfg));
+        }
       })
       .catch((e) => {
-        if (!corporaLoaded.current) setLoadError(e.message);
+        if (live && !corporaLoaded.current) setLoadError(e.message);
       });
+    return () => {
+      live = false;
+    };
   }, [uiLang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const current = corpora.find((c) => c.name === corpus);
 
   // Per-corpus config: limitations depend on whether the corpus has BM25, and
-  // limitations/pipeline steps are written in the UI language.
+  // limitations/pipeline steps are written in the UI language. Same `live`
+  // guard: switching corpus twice must not let the first reply land last.
   useEffect(() => {
     if (!corpus) return;
+    let live = true;
     getConfig(corpus, uiLang)
-      .then(applyConfig)
+      .then((cfg) => live && applyConfig(cfg))
       .catch((e) => {
-        if (!defaultsApplied.current) setLoadError(e.message);
+        if (live && !defaultsApplied.current) setLoadError(e.message);
       });
+    return () => {
+      live = false;
+    };
   }, [corpus, uiLang]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The mode must be one the selected corpus supports.
@@ -78,9 +95,19 @@ export default function App() {
 
   const turns = (corpus && histories[corpus]) || [];
 
+  // A new question scrolls to the bottom so the loading indicator is visible.
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [turns.length, busy]);
+  }, [turns.length]);
+
+  // A finished turn scrolls to the top of its answer instead: scrolling to
+  // the bottom would land below the source cards, past the answer itself.
+  useEffect(() => {
+    if (!finished) return;
+    document
+      .getElementById(`turn-${finished.id}-assistant`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [finished]);
 
   const updateTurn = (c, id, patch) =>
     setHistories((h) => ({
@@ -109,13 +136,21 @@ export default function App() {
           uiLang
         );
         updateTurn(c, id, { status: "done", result });
+        setFinished({ id, status: result.refused ? "refused" : "done" });
       } catch (e) {
-        updateTurn(c, id, { status: "failed", errorMessage: e.message });
+        // AbortSignal.timeout rejects with TimeoutError (AbortError in older
+        // browsers); its message is not meant for users, so translate it.
+        const timedOut = e.name === "TimeoutError" || e.name === "AbortError";
+        const errorMessage = timedOut
+          ? t("requestTimedOut", { s: ASK_TIMEOUT_MS / 1000 })
+          : e.message;
+        updateTurn(c, id, { status: "failed", errorMessage });
+        setFinished({ id, status: "failed" });
       } finally {
         setBusy(false);
       }
     },
-    [corpus, busy, settings, answerLang, uiLang]
+    [corpus, busy, settings, answerLang, uiLang, t]
   );
 
   const clear = () => setHistories((h) => ({ ...h, [corpus]: [] }));
@@ -138,6 +173,10 @@ export default function App() {
   const examples = current
     ? current.examples_by_language?.[uiLang] || current.examples || []
     : [];
+
+  const announcement = finished
+    ? t({ done: "announceReady", refused: "announceRefused", failed: "announceFailed" }[finished.status])
+    : "";
 
   return (
     <div className="layout">
@@ -165,7 +204,11 @@ export default function App() {
           onAnswerLang={setAnswerLang}
           onToggleSidebar={() => setSidebarOpen(true)}
         />
-        <div className="thread" aria-live="polite">
+        {/* The thread itself is not a live region: that would make screen
+            readers read every source card. One status line announces the
+            outcome of a turn instead; the loading indicator has its own. */}
+        <div className="sr-only" role="status">{announcement}</div>
+        <div className="thread">
           {config && corpora.length === 0 && (
             <div className="banner warn">
               <Inline text={t("noCorpus")} />
@@ -178,7 +221,7 @@ export default function App() {
           {turns.map((x) => <Turn key={x.id} turn={x} />)}
           <div ref={bottomRef} />
         </div>
-        <Composer onSend={send} disabled={busy || !corpus} />
+        <Composer onSend={send} busy={busy} disabled={busy || !corpus} />
       </main>
     </div>
   );

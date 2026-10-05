@@ -136,6 +136,72 @@ def test_dense_fallback_without_bm25(harness, monkeypatch, capsys):
     assert "mode=dense" in capsys.readouterr().out
 
 
+def test_rows_record_provider_and_diagnosis(harness, monkeypatch, capsys):
+    monkeypatch.setattr(rag.llm, "last_provider", lambda: "openrouter")
+    answered, worded_refusal, gate = _main(harness, monkeypatch)
+    assert answered["provider"] == "openrouter" and answered["diagnosis"] == "ok"
+    assert answered["gold_sources"] == ["a.txt"]
+    assert worded_refusal["provider"] == "openrouter" and worded_refusal["diagnosis"] == "ok"
+    assert gate["provider"] is None and gate["diagnosis"] == "ok"  # no LLM call on the gate
+    out = capsys.readouterr().out
+    assert "diagnosis" in out and "generation_overanswer" in out
+    # 3 rows: the per-row column plus the count table all say "ok".
+    assert "ok" in out
+
+
+def test_summary_prints_wilson_intervals_for_binomial_metrics(harness, monkeypatch, capsys):
+    _main(harness, monkeypatch)
+    out = capsys.readouterr().out
+    # 2 refusals, both right (tp=2, fp=0): precision 1.000 with Wilson [0.34-1.00].
+    assert "refusal precision" in out and "1.000 [0.34-1.00]" in out
+    # One verified answer that passed: 1/1.
+    assert "verify ok rate" in out and "1.000 [0.21-1.00]" in out
+    # Means of fractions carry no interval.
+    line = next(l for l in out.splitlines() if l.startswith("key-fact recall "))
+    assert "[" not in line
+
+
+@pytest.mark.parametrize("row, expected", [
+    ({"answerable": True, "refused": False, "key_fact_recall": 1.0,
+      "gold_sources": ["a"], "retrieved_sources": ["a"]}, "ok"),
+    ({"answerable": True, "refused": False, "key_fact_recall": None,
+      "gold_sources": ["a"], "retrieved_sources": ["b"]}, "ok"),
+    ({"answerable": True, "refused": True, "key_fact_recall": 0.0,
+      "gold_sources": ["a"], "retrieved_sources": ["b", "c"]}, "retrieval"),
+    ({"answerable": True, "refused": False, "key_fact_recall": 0.5,
+      "gold_sources": ["a"], "retrieved_sources": ["b"]}, "retrieval"),
+    ({"answerable": True, "refused": True, "key_fact_recall": 0.0,
+      "gold_sources": ["a"], "retrieved_sources": ["b", "a"]}, "generation_refusal"),
+    ({"answerable": True, "refused": False, "key_fact_recall": 0.5,
+      "gold_sources": ["a"], "retrieved_sources": ["a"]}, "generation"),
+    ({"answerable": False, "refused": True}, "ok"),
+    ({"answerable": False, "refused": False}, "generation_overanswer"),
+    ({"answerable": True, "refused": False, "error": "All LLM providers failed"}, "error"),
+])
+def test_diagnose(harness, row, expected):
+    assert harness.diagnose(row) == expected
+
+
+def test_diagnosis_counts_per_corpus_and_all(harness):
+    rows = [{"corpus": "a", "diagnosis": "ok"}, {"corpus": "a", "diagnosis": "retrieval"},
+            {"corpus": "b", "diagnosis": "ok"}]
+    counts = harness.diagnosis_counts(rows)
+    assert counts["a"] == {"ok": 1, "retrieval": 1}
+    assert counts["b"] == {"ok": 1}
+    assert counts["all"] == {"ok": 2, "retrieval": 1}
+    assert "all" not in harness.diagnosis_counts(rows[:2])
+
+
+def test_llm_error_row_is_diagnosed_as_error(harness, monkeypatch):
+    def down(prompt, *, system=None, order=None):
+        raise rag.llm.LLMError("All LLM providers failed: groq: 429")
+
+    monkeypatch.setattr(rag.llm, "complete", down)
+    rows = _main(harness, monkeypatch)
+    assert rows[0]["diagnosis"] == "error" and rows[0]["provider"] is None
+    assert rows[0]["retrieved_sources"] == ["a.txt"]
+
+
 def test_eval_file_requires_single_corpus(harness, monkeypatch):
     monkeypatch.setattr(sys, "argv", [
         "run_answer_eval.py", "--corpus", "a", "b", "--eval-file", str(harness.eval_file),

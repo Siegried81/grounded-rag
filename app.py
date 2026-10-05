@@ -323,11 +323,15 @@ def run_question(question: str, store, bm25, embedder, settings: dict) -> dict:
     t1 = time.perf_counter()
     try:
         answer = answer_question(question, retrieved, language=settings["language"])
-        msg["text"] = answer.text
-        msg["report"] = verify_answer(answer.text, retrieved, min_grounding=config.VERIFY_MIN_GROUNDING)
     except Exception as exc:  # LLMError or any provider failure: still show the passages
         msg["llm_error"] = ui.llm_error_hint(str(exc), config.LLM_PROVIDER)
+        msg["t_answer"] = time.perf_counter() - t1
+        return msg
     msg["t_answer"] = time.perf_counter() - t1
+    msg["text"] = answer.text
+    # Outside the try: verification is offline code, so a failure here is a bug
+    # to surface, not a provider outage to explain with an API-key hint.
+    msg["report"] = verify_answer(answer.text, retrieved, min_grounding=config.VERIFY_MIN_GROUNDING)
     return msg
 
 
