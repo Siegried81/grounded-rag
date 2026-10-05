@@ -8,14 +8,16 @@ happens here; the optional judge only builds a prompt and parses a reply.
 How each measurement is defined, and why:
 
 - Refusal. An answer counts as a refusal when the retrieval gate refused (no LLM
-  call), when it is the exact refusal message, or when the model declined in its
-  own words. The model is told to "say that you do not know", so a free-text
-  refusal is detected with explicit English and French phrase patterns
-  (`is_refusal`). A refusal phrase in the FIRST sentence counts; one later in the
-  answer counts only if the answer cites nothing, because "the sources do not say
-  X, but [S1] says Y" is a partial answer, not a refusal. It is a heuristic: a
-  hedged first sentence on an answerable question is scored as a refusal, and the
-  per-question results keep the text so such cases can be audited.
+  call), when it is one of the exact refusal messages (any answer language), when
+  it is empty, or when it cites NOTHING and the model declined in its own words.
+  The model is told to "say that you do not know", so a free-text refusal is
+  detected with explicit English, French and Spanish phrase patterns
+  (`is_refusal`). An answer carrying at least one [S#] citation is never a
+  free-text refusal: it makes a claim, so "I am not sure, but the fine is 35
+  million [S1]" is scored as an answer (and then as a hallucination on an
+  unanswerable question), not as a correct refusal. It is a heuristic: an uncited
+  hedge on an answerable question is scored as a refusal, and the per-question
+  results keep the text so such cases can be audited.
 - Refusal precision / recall / F1. The POSITIVE class is "should refuse" (the
   question is unanswerable from the corpus). Recall answers "did we refuse every
   question we had no evidence for?" (the hallucination guard); precision answers
@@ -30,17 +32,22 @@ How each measurement is defined, and why:
   Text facts match on word boundaries after lowercasing, accent stripping and
   punctuation removal. Numeric facts match any number in the answer within ±1%,
   whatever the grouping (1,234 / 1 234 / 1234), with million/billion scales
-  applied, so "$416.2 billion" matches "$416,161 million". A fact may be a list
-  of alternative spellings; any one of them counts.
+  applied, so "$416.2 billion" matches "$416,161 million". A bare number in the
+  answer (no scale word) also matches the fact's unscaled figure, the case of a
+  table copied "in millions"; a number WITH a scale word must match after
+  scaling, so "500 billion" does not satisfy "500 million". Digits glued to a
+  letter ("[S3]", "Q3") are not numbers. A fact may be a list of alternative
+  spellings; any one of them counts.
 - Citation validity. Pooled over every non-refused answer: valid [S#] markers
   divided by all distinct [S#] markers, as reported by rag.verify (reused, not
   reimplemented). Pooling weights each citation equally, so one answer with many
   citations cannot be hidden by many answers with one.
 - Grounding. Mean of rag.verify's lexical grounding score over non-refused
   answers. Refusals are excluded because verify gives the refusal message 1.0,
-  which would reward refusing. verify's stopword list is English, so French
-  answers carry more function words and score somewhat lower: compare a corpus
-  with itself over time, not French against English.
+  which would reward refusing. verify compares surface words with English,
+  French and Dutch stopwords dropped, so an answer in another language than its
+  sources still scores lower (vocabulary differs, numbers and names match):
+  compare a corpus with itself over time, not French against English.
 - Judge faithfulness (optional, off by default). One single LLM call per answer
   with a fixed 0-2 rubric returned as strict JSON; anything that does not parse
   to 0, 1 or 2 is recorded as None and counted, never guessed.
@@ -52,7 +59,7 @@ import json
 import re
 import unicodedata
 
-from rag.answer import REFUSAL_MESSAGE
+from rag.answer import REFUSAL_MESSAGE_SET
 from rag.types import Retrieved
 from rag.verify import extract_citations, split_sentences, verify_answer
 
@@ -61,12 +68,15 @@ NUMBER_TOLERANCE = 0.01  # relative tolerance for numeric key facts (±1%)
 # A number with optional thousands grouping by comma or (non-breaking) space, and
 # an optional decimal part. A comma followed by exactly three digits is read as a
 # thousands separator ("1,234" == 1234); any other comma is a decimal point
-# ("46,9" == 46.9), which is how French text writes decimals.
+# ("46,9" == 46.9), which is how French text writes decimals. A number must not
+# follow a digit, a separator or an ASCII letter: digits glued to a letter are
+# labels ("[S3]", "Q3", "H1"), not figures, and must not satisfy a numeric fact.
 _NUM = r"\d{1,3}(?:(?:,|[   ])\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?"
 _SCALE = r"thousand|millions?|billions?|milliards?|bn"
 _PERCENT = r"%|percent|pour\s*cent"
 _NUMBER_RE = re.compile(
-    rf"(?<![\d.,])({_NUM})(?![\d])(?:\s*({_SCALE})\b)?(?:\s*({_PERCENT}))?", re.IGNORECASE
+    rf"(?<![\d.,A-Za-z])({_NUM})(?![\d])(?:\s*({_SCALE})\b)?(?:\s*({_PERCENT}))?",
+    re.IGNORECASE,
 )
 _NUMERIC_FACT_RE = re.compile(
     rf"^\s*[$€£]?\s*({_NUM})\s*(?:({_SCALE})\b)?\s*({_PERCENT})?\s*$", re.IGNORECASE
@@ -83,7 +93,8 @@ _STRONG_REFUSAL_RE = re.compile(
     r"not able to answer|could not find|couldn t find|not enough information|"
     r"insufficient information|no information|won t guess|"
     r"je ne sais pas|ne peux pas repondre|impossible de repondre|aucune information|"
-    r"pas d information|pas assez d information|pas suffisamment d information)\b"
+    r"pas d information|pas assez d information|pas suffisamment d information|"
+    r"no lo se|no puedo responder|no tengo informacion)\b"
 )
 # Negations that are a refusal only when the sentence talks about the sources,
 # so "the AI Act does not mention spam filters" style content is not misread.
@@ -142,7 +153,13 @@ def _close(a: float, b: float) -> bool:
 
 
 def _single_fact_present(fact: str, text: str) -> bool:
-    """Match one fact spelling: numerically if the fact is a bare number, else as words."""
+    """Match one fact spelling: numerically if the fact is a bare number, else as words.
+
+    A number in the answer matches the fact after both scales are applied. The
+    unscaled figure is accepted only when the answer's number carries NO scale
+    word (a table value copied "in millions"); with a scale word it must match
+    scaled, so "500 billion" no longer satisfies the fact "500 million".
+    """
     m = _NUMERIC_FACT_RE.match(fact)
     if m:
         value = parse_number(m.group(1))
@@ -151,7 +168,7 @@ def _single_fact_present(fact: str, text: str) -> bool:
         for v, s, pct in extract_numbers(text):
             if is_pct and not pct:
                 continue  # "10%" must not be satisfied by an unrelated "10"
-            if _close(value * scale, v * s) or _close(value, v):
+            if _close(value * scale, v * s) or (s == 1.0 and _close(value, v)):
                 return True
         return False
     needle = normalize_text(fact)
@@ -187,19 +204,20 @@ def is_refusal(answer_text: str, gate_refused: bool = False) -> bool:
     """Decide whether an answer is a refusal (see the module docstring for the rule).
 
     `gate_refused` is the pipeline's own flag (retrieval found nothing, no LLM
-    call). Otherwise the first sentence decides, or any sentence when the answer
-    carries no [S#] citation at all.
+    call). The exact refusal message in any answer language counts, and so does
+    an empty answer. Otherwise an answer with any [S#] citation is an answer, and
+    an uncited one is a refusal when any of its sentences declines. (Earlier, a
+    refusal phrase in the first sentence overrode the citations, which let a
+    hedged-but-cited claim score as a correct refusal.)
     """
-    if gate_refused or answer_text.strip() == REFUSAL_MESSAGE:
+    if gate_refused or answer_text.strip() in REFUSAL_MESSAGE_SET:
         return True
     sentences = split_sentences(answer_text)
     if not sentences:
         return True  # an empty answer asserts nothing
-    if _sentence_is_refusal(sentences[0]):
-        return True
-    if not extract_citations(answer_text):
-        return any(_sentence_is_refusal(s) for s in sentences)
-    return False
+    if extract_citations(answer_text):
+        return False  # a cited sentence is a claim, whatever hedge precedes it
+    return any(_sentence_is_refusal(s) for s in sentences)
 
 
 def _ratio(num: float, den: float) -> float | None:

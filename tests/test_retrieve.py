@@ -1,10 +1,16 @@
 """Offline tests for rag.retrieve using tiny in-file fakes (no embedder/store imports).
 
 Covers the refusal gate (anchored to dense cosine), the candidate-pool passthrough,
-dense vs hybrid (BM25 fusion) modes, and MMR diversification.
+dense vs hybrid (BM25 fusion) modes, MMR diversification, the embedding-model
+guard, and the RETRIEVAL_MODE validation in config.
 """
 
-from rag.retrieve import retrieve
+import importlib
+
+import pytest
+
+import config
+from rag.retrieve import IndexMismatchError, check_same_embedder, retrieve
 from rag.types import Chunk, Retrieved
 
 
@@ -132,3 +138,48 @@ def test_hybrid_mmr_keeps_bm25_contribution():
                      mode="dense", use_mmr=True)
     assert hybrid[0].chunk.id == "3"
     assert dense[0].chunk.id == "1"
+
+
+# --- embedding-model guard ---------------------------------------------------
+
+class _Named:
+    """Store or embedder stand-in that only carries a `model` name."""
+
+    def __init__(self, model):
+        self.model = model
+
+
+def test_check_same_embedder_raises_only_on_a_real_mismatch():
+    with pytest.raises(IndexMismatchError, match="built with embedding model 'a'"):
+        check_same_embedder(_Named("a"), _Named("b"))
+    check_same_embedder(_Named("a"), _Named("a"))
+    # Fakes without a model name (tests, duck-typed backends) are not checked.
+    check_same_embedder(_Named(None), _Named("b"))
+    check_same_embedder(FakeStore([]), FakeEmbedder())
+
+
+def test_retrieve_refuses_to_query_an_index_from_another_embedder():
+    store = FakeStore([_r(1, 0.9)])
+    store.model = "nomic-embed-text"
+    emb = FakeEmbedder()
+    emb.model = "other-model"
+    with pytest.raises(IndexMismatchError):
+        retrieve("q", store, emb, top_k=1, threshold=0.0)
+    assert emb.calls == []  # the question is never embedded
+
+
+# --- config validation ---------------------------------------------------------
+
+def test_invalid_retrieval_mode_fails_at_import(monkeypatch):
+    # A typo would run hybrid (retrieve treats anything but "dense" as hybrid)
+    # while the UIs displayed the typo, so config refuses to load instead.
+    original = config.RETRIEVAL_MODE
+    monkeypatch.setenv("RETRIEVAL_MODE", "sparse")
+    try:
+        with pytest.raises(ValueError, match="RETRIEVAL_MODE"):
+            importlib.reload(config)
+    finally:
+        # Reload once more so every module sharing `config` sees the real settings again.
+        monkeypatch.setenv("RETRIEVAL_MODE", original)
+        importlib.reload(config)
+    assert config.RETRIEVAL_MODE == original

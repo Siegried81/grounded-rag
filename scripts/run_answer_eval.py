@@ -10,6 +10,14 @@ Per-question results are written as JSONL (with the answer text, so refusal
 decisions and fact matches can be audited) and a summary table is printed per
 corpus. `--judge` adds one LLM faithfulness-judge call per non-refused answer;
 `--sleep` spaces questions out for free-tier rate limits.
+
+Each row also records `provider` (which backend actually answered, since the
+fallback chain can switch models silently) and a `diagnosis` that follows the
+two-step RAG diagnostic: first, were the gold sources retrieved? then, did
+generation use them? See `diagnose` for the labels. The refusal rates and the
+verify ok rate are 0/1 outcomes per question, so the summary prints them with
+a 95% Wilson interval (rag/stats.py); the other aggregates are means of
+fractions and get none.
 """
 
 from __future__ import annotations
@@ -18,6 +26,7 @@ import argparse
 import json
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 # Allow `python scripts/run_answer_eval.py` from the project root.
@@ -36,6 +45,7 @@ from rag.answer_metrics import (  # noqa: E402
 from rag.embed import get_embedder  # noqa: E402
 from rag.lexical import BM25Index  # noqa: E402
 from rag.retrieve import retrieve  # noqa: E402
+from rag.stats import wilson  # noqa: E402
 from rag.store import VectorStore  # noqa: E402
 from scripts.run_eval import load_eval  # noqa: E402
 
@@ -57,6 +67,69 @@ _SUMMARY_ROWS = [
     ("mean grounding", "mean_grounding", ".3f"),
     ("verify ok rate", "verify_ok_rate", ".3f"),
 ]
+# Binomial summary metrics: key -> (successes, trials) read from the summary
+# dict, for the Wilson interval. The confusion counts come from
+# rag.answer_metrics.refusal_metrics; the verify counts are added by `with_intervals`.
+_BINOMIAL = {
+    "refusal_precision": lambda s: (s["tp"], s["tp"] + s["fp"]),
+    "refusal_recall": lambda s: (s["tp"], s["tp"] + s["fn"]),
+    "false_refusal_rate": lambda s: (s["fp"], s["fp"] + s["tn"]),
+    "verify_ok_rate": lambda s: (s["verify_ok_count"], s["verify_checked"]),
+}
+# Diagnosis labels in the order the summary table prints them.
+DIAGNOSES = ["ok", "retrieval", "generation_refusal", "generation", "generation_overanswer",
+             "error"]
+_COL = 24
+
+
+def diagnose(row: dict) -> str:
+    """Attribute one scored row to retrieval or generation (two-step RAG diagnostic).
+
+    Answerable questions: "ok" when every key fact is in a non-refused answer;
+    otherwise "retrieval" when none of the gold sources was retrieved (generation
+    never saw the evidence, so its output is not judged); "generation_refusal"
+    when the evidence was there but the model refused; "generation" when it
+    answered from the right passages and still missed facts. Unanswerable
+    questions: "ok" when refused, "generation_overanswer" otherwise. Rows with an
+    `error` are "error". An answerable item without key facts (recall None)
+    counts as "ok" when answered: there is nothing to grade the content against.
+    """
+    if row.get("error"):
+        return "error"
+    if not row["answerable"]:
+        return "ok" if row["refused"] else "generation_overanswer"
+    if not row["refused"] and row.get("key_fact_recall") in (None, 1.0):
+        return "ok"
+    gold, retrieved = set(row.get("gold_sources") or []), set(row.get("retrieved_sources") or [])
+    if not gold & retrieved:
+        return "retrieval"
+    return "generation_refusal" if row["refused"] else "generation"
+
+
+def diagnosis_counts(rows: list[dict]) -> dict[str, Counter]:
+    """Count diagnoses per corpus, plus "all" when there are several corpora."""
+    corpora = list(dict.fromkeys(r.get("corpus", "unknown") for r in rows))
+    out = {c: Counter(r["diagnosis"] for r in rows if r.get("corpus", "unknown") == c)
+           for c in corpora}
+    if len(corpora) > 1:
+        out["all"] = Counter(r["diagnosis"] for r in rows)
+    return out
+
+
+def with_intervals(summaries: dict[str, dict], rows: list[dict]) -> dict[str, dict]:
+    """Add `ci[metric] = (low, high) | None` to each summary for the binomial metrics.
+
+    verify_ok_rate's counts are not in the summary (it is a mean there), so they
+    are recomputed from the rows of that summary's corpus ("all" = every row).
+    """
+    for name, summary in summaries.items():
+        own = [r for r in rows if name == "all" or r.get("corpus", "unknown") == name]
+        checked = [r for r in own if not r.get("error") and not r["refused"]
+                   and r.get("verify_ok") is not None]
+        summary["verify_checked"] = len(checked)
+        summary["verify_ok_count"] = sum(1 for r in checked if r["verify_ok"])
+        summary["ci"] = {key: wilson(*count(summary)) for key, count in _BINOMIAL.items()}
+    return summaries
 
 
 def load_corpus(corpus: str):
@@ -80,17 +153,23 @@ def evaluate_item(item: dict, corpus: str, store, bm25, embedder, k: int, mode: 
     instead of crashing the run, so a long free-tier eval keeps its other results.
     """
     base = {"corpus": corpus, "id": item["id"], "question": item["question"],
-            "answerable": bool(item["answerable"])}
+            "answerable": bool(item["answerable"]),
+            "gold_sources": list(item.get("gold_sources") or [])}
     retrieved = retrieve(item["question"], store, embedder, top_k=k, bm25=bm25, mode=mode)
+    base["retrieved_sources"] = [r.chunk.source for r in retrieved]
     try:
         answer = answer_question(item["question"], retrieved)
     except rag.llm.LLMError as exc:
-        return {**base, "refused": False, "error": str(exc)}
+        row = {**base, "refused": False, "error": str(exc), "provider": None}
+        row["diagnosis"] = diagnose(row)
+        return row
     row = {**base, **score_answer(item, answer.text, answer.refused, answer.sources,
                                   min_grounding=config.VERIFY_MIN_GROUNDING)}
     row["answer"] = answer.text
-    row["retrieved_sources"] = [r.chunk.source for r in retrieved]
     row["top_score"] = retrieved[0].score if retrieved else None
+    # A gate refusal made no LLM call, so no provider answered.
+    row["provider"] = None if answer.refused else rag.llm.last_provider()
+    row["diagnosis"] = diagnose(row)
     if judge and not row["refused"]:
         try:
             raw = rag.llm.complete(
@@ -110,10 +189,18 @@ def _fmt(value, spec: str) -> str:
     return "n/a" if value is None else format(value, spec)
 
 
+def _fmt_ci(ci: tuple[float, float] | None) -> str:
+    """Render a Wilson interval as " [lo-hi]", or "" when undefined."""
+    return "" if ci is None else f" [{ci[0]:.2f}-{ci[1]:.2f}]"
+
+
 def print_summary(summaries: dict[str, dict], judge: bool) -> None:
-    """Print one column per corpus (and "all") with every aggregate metric."""
+    """Print one column per corpus (and "all") with every aggregate metric.
+
+    Binomial metrics carry their 95% interval when `with_intervals` has run.
+    """
     names = list(summaries)
-    print(f"{'metric':<28}" + "".join(f"{n:>18}" for n in names))
+    print(f"{'metric':<28}" + "".join(f"{n:>{_COL}}" for n in names))
     rows = list(_SUMMARY_ROWS)
     if judge:
         rows += [("judge faithfulness (0-2)", "judge_mean", ".2f"),
@@ -122,8 +209,16 @@ def print_summary(summaries: dict[str, dict], judge: bool) -> None:
         if key is None:
             cells = [f"{s['n_answerable']}/{s['n_unanswerable']}" for s in summaries.values()]
         else:
-            cells = [_fmt(s[key], spec) for s in summaries.values()]
-        print(f"{label:<28}" + "".join(f"{c:>18}" for c in cells))
+            cells = [_fmt(s[key], spec) + _fmt_ci(s.get("ci", {}).get(key))
+                     for s in summaries.values()]
+        print(f"{label:<28}" + "".join(f"{c:>{_COL}}" for c in cells))
+
+
+def print_diagnosis(counts: dict[str, Counter]) -> None:
+    """Print the diagnosis count table, one column per corpus (and "all")."""
+    print(f"{'diagnosis':<28}" + "".join(f"{n:>{_COL}}" for n in counts))
+    for label in DIAGNOSES:
+        print(f"{label:<28}" + "".join(f"{c[label]:>{_COL}}" for c in counts.values()))
 
 
 def main() -> None:
@@ -148,7 +243,8 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     rows: list[dict] = []
     first = True
-    print(f"{'id':<8} {'ans':>4} {'ref':>4} {'facts':>6} {'cite':>6} {'grnd':>6}  question")
+    print(f"{'id':<8} {'ans':>4} {'ref':>4} {'facts':>6} {'cite':>6} {'grnd':>6} "
+          f"{'diagnosis':<22} question")
     with out_path.open("w", encoding="utf-8") as out:
         for corpus in args.corpus:
             store, bm25 = load_corpus(corpus)
@@ -174,10 +270,13 @@ def main() -> None:
                     f"{'y' if row['refused'] else 'n':>4} "
                     f"{_fmt(row['key_fact_recall'], '.2f'):>6} "
                     f"{'-' if cites is None else len(cites):>6} "
-                    f"{_fmt(row['grounding_score'], '.2f'):>6}  {row['question'][:50]}"
+                    f"{_fmt(row['grounding_score'], '.2f'):>6} "
+                    f"{row['diagnosis']:<22} {row['question'][:50]}"
                 )
     print("-" * 80)
-    print_summary(summarize_by_corpus(rows), args.judge)
+    print_summary(with_intervals(summarize_by_corpus(rows), rows), args.judge)
+    print("-" * 80)
+    print_diagnosis(diagnosis_counts(rows))
     print(f"results: {out_path}")
 
 
