@@ -749,7 +749,7 @@ What the suites pin down, beyond per-module unit tests:
   `1m2.5s`, `250ms`), all-keys-limited → one capped wait → retry, the cap and the
   0 = disabled switch, no wait on a non-429 failure, cache hit on an identical
   request, cache miss when the model changes, failures never cached.
-- **Answer metrics** (`test_answer_metrics.py`, 28 tests): refusal detection in
+- **Answer metrics** (`test_answer_metrics.py`, 55 tests): refusal detection in
   EN/FR including the partial-answer rule, `None` on empty denominators, numeric
   fact matching across groupings, scales and French decimals, judge-reply parsing.
 - **Red team** (`test_redteam.py`): an out-of-scope case refuses before any LLM
