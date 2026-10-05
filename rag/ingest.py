@@ -10,6 +10,8 @@ costs nothing.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import config
 
 SUFFIXES = {".txt", ".md", ".pdf"}
@@ -23,24 +25,40 @@ def _read_pdf_pages(path) -> list[str]:
     return [(page.extract_text() or "") for page in reader.pages]
 
 
-def load_documents(corpus: str) -> list[tuple[str, str]]:
-    """Return (filename, text) for each supported, non-empty file of a corpus.
+def document_paths(corpus: str) -> list[Path]:
+    """The files of a corpus the indexer reads, sorted by filename.
 
-    README.md is skipped because it documents the folder rather than being
-    evidence; results are sorted by filename so the index is deterministic. PDFs
-    are joined into one string here; `ingest_corpus` reads them page-by-page
-    instead so it can record page numbers.
+    Only files directly inside `data/<corpus>/` count: a subfolder is not walked,
+    so raw dumps kept beside a corpus are not indexed. README.md is skipped
+    because it documents the folder rather than being evidence, and sorting keeps
+    the index deterministic. Single source of this rule, shared by chunking and
+    by the API's document viewer, so a reader can only open a file that was
+    actually indexed.
     """
+    return [
+        p
+        for p in sorted(config.corpus_dir(corpus).iterdir(), key=lambda p: p.name)
+        if p.is_file() and p.suffix.lower() in SUFFIXES and p.name != "README.md"
+    ]
+
+
+def read_document(path) -> str:
+    """A document's full text, PDF pages joined with newlines.
+
+    `ingest_corpus` reads PDFs page by page instead, so it can record the page
+    number a chunk came from; this flat form is for callers that just want the
+    text.
+    """
+    if path.suffix.lower() == ".pdf":
+        return "\n".join(_read_pdf_pages(path))
+    return path.read_text(encoding="utf-8")
+
+
+def load_documents(corpus: str) -> list[tuple[str, str]]:
+    """Return (filename, text) for each supported, non-empty file of a corpus."""
     docs = []
-    for path in sorted(config.corpus_dir(corpus).iterdir(), key=lambda p: p.name):
-        if not path.is_file() or path.suffix.lower() not in SUFFIXES:
-            continue
-        if path.name == "README.md":
-            continue
-        if path.suffix.lower() == ".pdf":
-            text = "\n".join(_read_pdf_pages(path))
-        else:
-            text = path.read_text(encoding="utf-8")
+    for path in document_paths(corpus):
+        text = read_document(path)
         if text.strip():
             docs.append((path.name, text))
     return docs
@@ -56,11 +74,7 @@ def _chunk_corpus(corpus: str, chunker: str):
     from rag.smart_chunk import chunk_pages, smart_chunk_text
 
     chunks = []
-    for path in sorted(config.corpus_dir(corpus).iterdir(), key=lambda p: p.name):
-        if not path.is_file() or path.suffix.lower() not in SUFFIXES:
-            continue
-        if path.name == "README.md":
-            continue
+    for path in document_paths(corpus):
         source = path.name
         if path.suffix.lower() == ".pdf":
             # Page-aware so a citation can point to a PDF page.

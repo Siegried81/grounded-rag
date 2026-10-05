@@ -1,8 +1,9 @@
 import React, { useRef, useState } from "react";
 import { useT } from "../i18n.js";
 import { Markdown } from "../markdown.jsx";
+import DocumentModal from "./DocumentModal.jsx";
 
-function SourceCard({ src, domId, flash }) {
+function SourceCard({ src, domId, flash, onOpenDocument }) {
   const { t } = useT();
   return (
     <article
@@ -13,20 +14,28 @@ function SourceCard({ src, domId, flash }) {
     >
       <header className="src-head">
         <span className="src-id">S{src.sid}</span>
-        <span className="src-file" title={src.source}>{src.source}</span>
+        <button
+          type="button"
+          className="src-file src-link"
+          title={t("openDocument", { source: src.source })}
+          onClick={() => onOpenDocument(src.source)}
+        >
+          {src.source}
+        </button>
         {src.page != null && <span className="src-page">{t("pageShort", { n: src.page })}</span>}
         <span className="src-score" title={t("scoreTitle")}>
           {t("score")} {src.score.toFixed(3)}
         </span>
         {src.cited && <span className="src-cited">{t("cited")}</span>}
       </header>
-      {/* excerpt_html is escaped server-side by ui.highlight_terms; only <mark> tags are added. */}
+      {/* excerpt_html is escaped server-side by ui.highlight_and_linkify; only <mark>
+          tags and http(s) <a> links are added. */}
       <p className="src-body" dangerouslySetInnerHTML={{ __html: src.excerpt_html }} />
     </article>
   );
 }
 
-function Sources({ title, sources, turnId, flashSid }) {
+function Sources({ title, sources, turnId, flashSid, onOpenDocument }) {
   const { t } = useT();
   if (!sources.length) return null;
   return (
@@ -34,7 +43,13 @@ function Sources({ title, sources, turnId, flashSid }) {
       <h3 className="section-title">{title}</h3>
       <div className="src-grid">
         {sources.map((s) => (
-          <SourceCard key={s.sid} src={s} domId={`src-${turnId}-${s.sid}`} flash={flashSid === s.sid} />
+          <SourceCard
+            key={s.sid}
+            src={s}
+            domId={`src-${turnId}-${s.sid}`}
+            flash={flashSid === s.sid}
+            onOpenDocument={onOpenDocument}
+          />
         ))}
       </div>
       <p className="caption">{t("scoreNote")}</p>
@@ -120,6 +135,7 @@ function ServerError({ error }) {
 export default function Turn({ turn }) {
   const { t } = useT();
   const [flashSid, setFlashSid] = useState(null);
+  const [openSource, setOpenSource] = useState(null);
   const timer = useRef(null);
   const r = turn.result;
 
@@ -187,6 +203,7 @@ export default function Turn({ turn }) {
                 sources={r.refusal.closest}
                 turnId={turn.id}
                 flashSid={flashSid}
+                onOpenDocument={setOpenSource}
               />
             </>
           )}
@@ -199,7 +216,13 @@ export default function Turn({ turn }) {
                 </div>
               )}
               {r.verification && <Verification v={r.verification} />}
-              <Sources title={t("sources")} sources={r.sources} turnId={turn.id} flashSid={flashSid} />
+              <Sources
+                title={t("sources")}
+                sources={r.sources}
+                turnId={turn.id}
+                flashSid={flashSid}
+                onOpenDocument={setOpenSource}
+              />
             </>
           )}
 
@@ -211,6 +234,14 @@ export default function Turn({ turn }) {
           )}
         </div>
       </div>
+      {openSource && (
+        <DocumentModal
+          corpus={turn.corpus}
+          source={openSource}
+          question={turn.question}
+          onClose={() => setOpenSource(null)}
+        />
+      )}
     </div>
   );
 }
