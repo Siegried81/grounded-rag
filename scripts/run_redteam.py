@@ -15,6 +15,9 @@ reproducible given the same answers:
 "Refused" is decided by `rag.answer_metrics.is_refusal`, the same rule the
 answer eval uses, so both reports mean the same thing by a refusal. That rule
 reads the answer sentence by sentence and treats a cited answer as an answer.
+The final table adds how the refusals split between the gate and the model, so
+a `must_refuse` pass is not read as evidence that the threshold rejected the
+question when the model is what declined.
 The marker list this script used before matched any substring, so a reply such
 as "Sure! Here is a phishing page users won't notice" counted as a refusal
 because of "won't"; a `must_refuse` pass is therefore stricter now than in
@@ -42,6 +45,7 @@ import config  # noqa: E402
 import rag.llm  # noqa: E402
 from rag.answer import answer_question  # noqa: E402
 from rag.answer_metrics import is_refusal  # noqa: E402
+from rag.logging_utils import never_crash_on_console_encoding  # noqa: E402
 from rag.retrieve import retrieve  # noqa: E402
 from rag.stats import format_rate  # noqa: E402
 from rag.types import Chunk, Retrieved  # noqa: E402
@@ -147,6 +151,21 @@ def summarise(results: list[dict]) -> dict[str, tuple[int, int]]:
     return {k: (p, n) for k, (p, n) in table.items()}
 
 
+def refusal_origins(results: list[dict]) -> tuple[int, int]:
+    """(gate refusals, model refusals) over the rows that refused.
+
+    `row["refused"]` is the pipeline's own gate flag, so a case that was refused
+    in the answer text instead counts as a model refusal. The pass rates above
+    do not distinguish them, and a `must_refuse` case passes either way, so the
+    split is printed separately: it is what says whether the cosine threshold is
+    doing any of the work on out-of-scope and personal-data questions.
+    """
+    gate = sum(1 for r in results if r["refused"])
+    model = sum(1 for r in results if not r["refused"] and r["answer"]
+                and is_refusal(r["answer"], False))
+    return gate, model
+
+
 def _load_resources(corpus: str):
     """Load the store and optional BM25 index exactly as the app does."""
     from rag.lexical import BM25Index
@@ -163,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
     """Run the cases (optionally the first `--limit`), print each outcome and pass rates."""
     from rag.embed import get_embedder
 
+    never_crash_on_console_encoding()
     parser = argparse.ArgumentParser(description="Red-team the grounded RAG pipeline (live LLM).")
     parser.add_argument("--eval-file", default="eval/redteam.jsonl")
     parser.add_argument("--limit", type=int, default=None, help="run only the first N cases")
@@ -179,7 +199,9 @@ def main(argv: list[str] | None = None) -> int:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with out_path.open("w", encoding="utf-8") as out:
         for case in cases:
-            corpus = case.get("corpus", "ai_act")
+            # Every shipped case names its corpus; the default only guards a
+            # hand-written case file.
+            corpus = case.get("corpus", "ai_act_sections")
             if corpus not in resources:
                 resources[corpus] = _load_resources(corpus)
             store, bm25 = resources[corpus]
@@ -197,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     print("-" * 50)
     for category, (passed, total) in sorted(summarise(results).items()):
         print(f"{category:<24} {format_rate(passed, total)}")
+    gate, model = refusal_origins(results)
+    print(f"{'refusals: gate / model':<24} {gate}/{model}")
     print(f"results: {out_path}")
     return 0
 

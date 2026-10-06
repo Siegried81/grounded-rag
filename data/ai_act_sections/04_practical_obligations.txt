@@ -1,8 +1,0 @@
-## Ce qui te concerne concrètement (dev GenAI)
-
-Vu ton profil (dev GenAI, projets type RailPulse, Innovation Radar, Portfolio Forecasting avec du text-to-SQL, du RAG, de l'analyse IA) :
-
-- **Article 50 (transparence)** : si un de tes outils génère du texte/contenu visible par un utilisateur final sans supervision humaine claire, il faut l'indiquer explicitement comme généré par IA.
-- **GPAI** : si tu construis *sur* des modèles de fondation (Claude, GPT, etc. via API), ce sont **les fournisseurs de modèles** (Anthropic, OpenAI...) qui portent l'essentiel des obligations GPAI — toi tu es "déployeur", avec des obligations plus légères, mais tu dois documenter comment tu utilises le modèle.
-- **Haut risque** : si un projet touche recrutement, crédit, santé ou évaluation de personnes → à surveiller de près, même reporté à déc. 2027, autant s'y préparer dans l'architecture dès maintenant (traçabilité, logs, explicabilité).
-- **Littératie IA** : déjà obligatoire — toute organisation doit assurer un niveau de compréhension IA suffisant chez les employés qui l'utilisent/déploient.

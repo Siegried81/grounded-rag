@@ -260,3 +260,32 @@ def test_main_writes_every_row_to_jsonl(monkeypatch, scripted_llm, capsys, tmp_p
     assert row["id"] == "c0" and row["passed"] is True
     assert row["answer"] == scripted_llm["reply"] and row["provider"] == "groq"
     assert f"results: {out_file}" in capsys.readouterr().out
+
+
+def test_printing_an_answer_never_dies_on_the_console_encoding(monkeypatch, capsys):
+    """A cp1252 console must not kill a run that has already paid for its LLM calls.
+
+    EUR-Lex and the models emit U+2011, U+202F and U+2019, none of which cp1252
+    can encode, and `--verbose` prints the answer verbatim. The real 21-case run
+    of 2026-10-06 died on U+202F in the jb-03 answer after every call had been
+    made. The guard is applied in `main`, so it is `main` that is checked here.
+    """
+    import io
+
+    import rag.logging_utils as lu
+
+    stream = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", newline="")
+    monkeypatch.setattr("sys.stdout", stream)
+    lu.never_crash_on_console_encoding()
+    print("non‑breaking hyphen ’")  # would raise UnicodeEncodeError
+    stream.flush()
+    assert stream.buffer.getvalue()  # something was written instead of raising
+
+
+def test_the_encoding_guard_tolerates_a_stream_it_cannot_reconfigure(monkeypatch):
+    """pytest's capture object has no `reconfigure`, and that is not a failure."""
+    import rag.logging_utils as lu
+
+    monkeypatch.setattr("sys.stdout", object())
+    monkeypatch.setattr("sys.stderr", object())
+    lu.never_crash_on_console_encoding()
