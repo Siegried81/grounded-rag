@@ -18,6 +18,11 @@ generation use them? See `diagnose` for the labels. The refusal rates and the
 verify ok rate are 0/1 outcomes per question, so the summary prints them with
 a 95% Wilson interval (rag/stats.py); the other aggregates are means of
 fractions and get none.
+
+The summary also prints how the refusals split between the retrieval gate and
+the model, right above the refusal scores, which merge the two. Without that
+line a refusal F1 of 1.000 reads as proof that the cosine threshold works, when
+it can equally mean the threshold never fired and the model declined every time.
 """
 
 from __future__ import annotations
@@ -44,6 +49,7 @@ from rag.answer_metrics import (  # noqa: E402
 )
 from rag.embed import get_embedder  # noqa: E402
 from rag.lexical import BM25Index  # noqa: E402
+from rag.logging_utils import never_crash_on_console_encoding  # noqa: E402
 from rag.retrieve import retrieve  # noqa: E402
 from rag.stats import wilson  # noqa: E402
 from rag.store import VectorStore  # noqa: E402
@@ -52,11 +58,14 @@ from scripts.run_eval import load_eval  # noqa: E402
 DEFAULT_CORPORA = ["ai_act_sections", "filings_sections"]
 DEFAULT_OUT = config.ROOT / "logs" / "answer_eval_results.jsonl"
 
-# Summary rows: (label, key in the summary dict, format).
+# Summary rows: (label, key in the summary dict, format). A tuple of two keys is
+# printed as "a/b"; the gate/model split is shown next to the refusal scores,
+# which merge the two, so "refusal F1" is never read as evidence about the gate.
 _SUMMARY_ROWS = [
     ("questions", "n", "d"),
     ("errors (excluded)", "n_errors", "d"),
-    ("answerable / unanswerable", None, None),
+    ("answerable / unanswerable", ("n_answerable", "n_unanswerable"), None),
+    ("refusals: gate / model", ("n_gate_refused", "n_model_refused"), None),
     ("refusal precision", "refusal_precision", ".3f"),
     ("refusal recall", "refusal_recall", ".3f"),
     ("refusal F1", "refusal_f1", ".3f"),
@@ -197,7 +206,8 @@ def _fmt_ci(ci: tuple[float, float] | None) -> str:
 def print_summary(summaries: dict[str, dict], judge: bool) -> None:
     """Print one column per corpus (and "all") with every aggregate metric.
 
-    Binomial metrics carry their 95% interval when `with_intervals` has run.
+    Binomial metrics carry their 95% interval when `with_intervals` has run, and
+    a row whose key is a pair of keys prints both counts as "a/b".
     """
     names = list(summaries)
     print(f"{'metric':<28}" + "".join(f"{n:>{_COL}}" for n in names))
@@ -206,8 +216,8 @@ def print_summary(summaries: dict[str, dict], judge: bool) -> None:
         rows += [("judge faithfulness (0-2)", "judge_mean", ".2f"),
                  ("judge unparsed", "judge_unparsed", "d")]
     for label, key, spec in rows:
-        if key is None:
-            cells = [f"{s['n_answerable']}/{s['n_unanswerable']}" for s in summaries.values()]
+        if isinstance(key, tuple):
+            cells = [f"{s[key[0]]}/{s[key[1]]}" for s in summaries.values()]
         else:
             cells = [_fmt(s[key], spec) + _fmt_ci(s.get("ci", {}).get(key))
                      for s in summaries.values()]
@@ -223,6 +233,7 @@ def print_diagnosis(counts: dict[str, Counter]) -> None:
 
 def main() -> None:
     """Parse arguments, evaluate every question, write JSONL results and print the summary."""
+    never_crash_on_console_encoding()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus", nargs="+", default=DEFAULT_CORPORA)
     parser.add_argument("--eval-file", default=None,

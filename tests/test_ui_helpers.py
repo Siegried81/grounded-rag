@@ -131,9 +131,16 @@ def test_example_questions_short_or_missing_file(tmp_path):
 
 
 def test_example_questions_shipped_eval_files_load():
+    """One eval file per indexed corpus, each offering four usable examples.
+
+    The single-document `ai_act` corpus is gone: it held the same text as
+    `ai_act_sections`, so the UI now picks examples from these two only.
+    """
     from config import ROOT
 
-    for name in ("ai_act", "ai_act_sections", "filings_sections"):
+    corpora = sorted(p.name for p in (ROOT / "data").iterdir() if p.is_dir())
+    assert corpora == ["ai_act_sections", "filings", "filings_sections"]
+    for name in ("ai_act_sections", "filings_sections"):
         qs = ui.example_questions(ROOT / "eval" / f"{name}_eval.jsonl")
         assert len(qs) == 4 and all(isinstance(q, str) and q for q in qs)
 
@@ -199,14 +206,16 @@ def test_embed_error_hint_per_provider():
 
 
 def test_localized_examples_translate_known_and_keep_unknown(tmp_path):
-    fr_q = "Quels sont les quatre niveaux de risque définis par l'AI Act ?"
-    rows = [json.dumps({"question": q}) for q in (fr_q, "Untranslated question?")]
+    """The eval files are English, so "fr" is the language that needs a rendering."""
+    en_q = "What is the official number of the EU Artificial Intelligence Act?"
+    rows = [json.dumps({"question": q}) for q in (en_q, "Untranslated question?")]
     path = tmp_path / "x_eval.jsonl"
     path.write_text("\n".join(rows), encoding="utf-8")
-    assert ui.localized_examples(path, "en") == [
-        "What are the four risk levels defined by the AI Act?", "Untranslated question?",
+    assert ui.localized_examples(path, "fr") == [
+        "Quel est le numéro officiel du règlement européen sur l'IA ?",
+        "Untranslated question?",
     ]
-    assert ui.localized_examples(path, "fr") == [fr_q, "Untranslated question?"]
+    assert ui.localized_examples(path, "en") == [en_q, "Untranslated question?"]
     assert ui.localized_examples(tmp_path / "missing.jsonl", "en") == []
 
 

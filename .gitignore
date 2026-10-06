@@ -5,3 +5,6 @@ __pycache__/
 index/
 logs/
 .pytest_cache/
+
+claude_*.txt
+*transcript*.txt

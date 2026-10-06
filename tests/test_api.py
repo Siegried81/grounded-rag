@@ -240,12 +240,12 @@ def test_config_ui_lang_french_and_invalid(setup, client):
 
 
 def test_corpora_examples_by_language(setup, client, monkeypatch):
-    fr_q = "Quels sont les quatre niveaux de risque définis par l'AI Act ?"
-    (api.EVAL_DIR / "demo_eval.jsonl").write_text(json.dumps({"question": fr_q}), encoding="utf-8")
+    """Examples ship in both UI languages; the eval files are English, so "fr" translates."""
+    en_q = "What is the official number of the EU Artificial Intelligence Act?"
+    fr_q = "Quel est le numéro officiel du règlement européen sur l'IA ?"
+    (api.EVAL_DIR / "demo_eval.jsonl").write_text(json.dumps({"question": en_q}), encoding="utf-8")
     c = client.get("/api/corpora").json()["corpora"][0]
-    assert c["examples_by_language"] == {
-        "en": ["What are the four risk levels defined by the AI Act?"], "fr": [fr_q],
-    }
+    assert c["examples_by_language"] == {"en": [en_q], "fr": [fr_q]}
     assert c["examples"] == c["examples_by_language"]["en"]
     c_fr = client.get("/api/corpora", params={"ui_lang": "fr"}).json()["corpora"][0]
     assert c_fr["examples"] == [fr_q]

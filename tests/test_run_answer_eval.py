@@ -149,6 +149,19 @@ def test_rows_record_provider_and_diagnosis(harness, monkeypatch, capsys):
     assert "ok" in out
 
 
+def test_summary_separates_gate_refusals_from_model_refusals(harness, monkeypatch, capsys):
+    """The two refusals have different origins, and the table reports them apart.
+
+    t-03 is refused by the retrieval gate (no LLM call), t-02 by the model in its
+    own words. The refusal scores merge both, so without this row a refusal F1 of
+    1.000 would read as evidence about the cosine threshold.
+    """
+    _main(harness, monkeypatch)
+    out = capsys.readouterr().out
+    line = next(l for l in out.splitlines() if l.startswith("refusals: gate / model"))
+    assert line.split()[-1] == "1/1"
+
+
 def test_summary_prints_wilson_intervals_for_binomial_metrics(harness, monkeypatch, capsys):
     _main(harness, monkeypatch)
     out = capsys.readouterr().out
