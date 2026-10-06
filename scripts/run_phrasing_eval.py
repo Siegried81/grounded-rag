@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config  # noqa: E402
 from rag.embed import get_embedder  # noqa: E402
+from rag.logging_utils import never_crash_on_console_encoding  # noqa: E402
 from rag.metrics import hit_rate_at_k, mrr  # noqa: E402
 from rag.retrieve import retrieve  # noqa: E402
 from rag.stats import format_rate  # noqa: E402
@@ -73,6 +74,7 @@ def consistency(rows: list[dict]) -> tuple[int, int]:
 
 def main() -> None:
     """Parse arguments, score every phrasing and print per-style hit rates and consistency."""
+    never_crash_on_console_encoding()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--eval-file", default=str(DEFAULT_EVAL))
     parser.add_argument("--corpus", nargs="*", default=None,

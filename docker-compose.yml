@@ -2,7 +2,7 @@
 #
 #   docker compose up --build                          # app only (hosted LLM, host Ollama or none)
 #   docker compose --profile local-llm up --build      # app + bundled Ollama
-#   docker compose --profile tools run --rm ingest --corpus ai_act
+#   docker compose --profile tools run --rm ingest --corpus ai_act_sections
 #   docker compose --profile api up --build            # + JSON API / React UI on :8002
 #
 # See docs/docker.md for the reasoning behind each choice.
@@ -74,7 +74,7 @@ services:
     # One-shot: builds the index for one corpus and exits. Arguments after the
     # service name replace `command`, e.g. `run --rm ingest --corpus filings`.
     entrypoint: ["python", "cli.py", "ingest"]
-    command: ["--corpus", "ai_act"]
+    command: ["--corpus", "ai_act_sections"]
     restart: "no"
     depends_on:
       ollama:

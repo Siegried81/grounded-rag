@@ -8,9 +8,12 @@ The BM25 index is loaded exactly as `cli.py` and `app.py` do, so by default the
 metrics describe the retrieval the app actually runs (`config.RETRIEVAL_MODE`,
 hybrid unless overridden). `--mode dense` measures the dense channel alone.
 
-Defaults target the `*_sections` corpora (several documents per corpus), whose
-eval file is `eval/<corpus>_eval.jsonl`; the one-file `ai_act` corpus gives a
-hit rate of 1.0 by construction and says nothing about ranking. hit_rate@k is a
+Defaults target the `*_sections` corpora (many documents per corpus), whose eval
+file is `eval/<corpus>_eval.jsonl`. Source-level metrics only discriminate when
+a corpus has several documents: a one-file corpus gives a hit rate of 1.0 by
+construction and says nothing about ranking, which is why both shipped corpora
+are split (308 files for the regulation, 6 Item sections for the 10-K) and why
+the single-file `ai_act` corpus was retired. hit_rate@k is a
 0/1 outcome per question, so it is printed with a 95% Wilson interval
 (rag/stats.py); recall@k and MRR are not binomial and get none.
 """
@@ -28,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config  # noqa: E402
 from rag.embed import get_embedder  # noqa: E402
 from rag.lexical import BM25Index  # noqa: E402
+from rag.logging_utils import never_crash_on_console_encoding  # noqa: E402
 from rag.metrics import hit_rate_at_k, mrr, recall_at_k  # noqa: E402
 from rag.retrieve import retrieve  # noqa: E402
 from rag.stats import wilson  # noqa: E402
@@ -68,6 +72,7 @@ def format_interval(successes: int, n: int) -> str:
 
 def main() -> None:
     """Parse arguments, evaluate every question and print per-question and aggregate metrics."""
+    never_crash_on_console_encoding()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--corpus", default=DEFAULT_CORPUS)
     parser.add_argument("--eval-file", default=None,

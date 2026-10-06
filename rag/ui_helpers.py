@@ -68,27 +68,36 @@ PIPELINE_STEPS_FR = [
     "source, signale les affirmations non citées et mesure l'ancrage lexical.",
 ]
 
-# English renderings of the French example questions picked from the ai_act and
-# ai_act_sections eval files. The eval files stay French (they are what the
-# retrieval and answer evaluations measure); only the questions shown as clickable
-# examples are translated, so an English-speaking user sees what they can ask.
-# Keyed by the exact French text: a question added to an eval file later simply
-# shows untranslated until a translation is added here.
-EXAMPLE_TRANSLATIONS_EN = {
-    "Quels sont les quatre niveaux de risque définis par l'AI Act ?":
-        "What are the four risk levels defined by the AI Act?",
-    "Quelles obligations s'appliquent aux systèmes d'IA à haut risque ?":
-        "What obligations apply to high-risk AI systems?",
-    "Qu'impose l'Article 50 en matière de transparence ?":
-        "What does Article 50 require in terms of transparency?",
-    "Pourquoi les obligations haut risque ont-elles été reportées à décembre 2027 ?":
-        "Why were the high-risk obligations postponed to December 2027?",
-    "La reconnaissance des émotions au travail ou à l'école est-elle permise ?":
-        "Is emotion recognition at work or at school allowed?",
-    "Qu'impose l'Article 50 à un outil qui génère du contenu visible par l'utilisateur ?":
-        "What does Article 50 require of a tool that generates content visible to the user?",
-    "Que se passe-t-il le 2 décembre 2026 pour les systèmes déjà sur le marché ?":
-        "What happens on 2 December 2026 to systems already on the market?",
+# French renderings of the example questions picked from the shipped eval files.
+# Both corpora (Regulation (EU) 2024/1689 and the Apple 10-K) are English, and so
+# are the eval files — they are what the retrieval and answer evaluations measure,
+# and the questions have to be in the documents' language to be a fair test. Only
+# the questions shown as clickable examples are translated, so a French-speaking
+# user sees what they can ask. Keyed by the exact English text: a question added
+# to an eval file later simply shows untranslated until a rendering is added here.
+EXAMPLE_TRANSLATIONS_FR = {
+    "What is the official number of the EU Artificial Intelligence Act?":
+        "Quel est le numéro officiel du règlement européen sur l'IA ?",
+    "What are the maximum administrative fines for breaching the prohibitions of Article 5?":
+        "Quelles sont les amendes administratives maximales en cas de violation des "
+        "interdictions de l'article 5 ?",
+    "What amount of training compute presumes that a general-purpose AI model has high "
+    "impact capabilities?":
+        "Quel volume de calcul d'entraînement fait présumer qu'un modèle d'IA à usage "
+        "général a des capacités à fort impact ?",
+    "What support must Member States give to SMEs and start-ups under this Regulation?":
+        "Quel soutien les États membres doivent-ils apporter aux PME et aux start-up au "
+        "titre de ce règlement ?",
+    "What products does Apple design, manufacture and market?":
+        "Quels produits Apple conçoit-elle, fabrique-t-elle et commercialise-t-elle ?",
+    "Who has overall responsibility for managing cybersecurity risks at Apple?":
+        "Qui a la responsabilité globale de la gestion des risques de cybersécurité chez "
+        "Apple ?",
+    "Which products and services drove Apple's net sales growth?":
+        "Quels produits et services ont porté la croissance du chiffre d'affaires net "
+        "d'Apple ?",
+    "How many full-time equivalent employees did Apple have?":
+        "Combien d'employés en équivalent temps plein Apple comptait-elle ?",
 }
 
 
@@ -221,15 +230,15 @@ def localized_examples(eval_path: Path, ui_lang: str = "en", n: int = 4) -> list
     """Example questions for a corpus, shown in the requested UI language.
 
     The same questions as `example_questions` are picked, so both languages offer
-    the same examples. "en" swaps each French question for its hand-written
-    translation in EXAMPLE_TRANSLATIONS_EN; any other language returns the eval
-    file's own wording. A question with no translation keeps its original text
-    rather than disappearing (so an English corpus is unchanged in "fr").
+    the same examples. The shipped corpora and eval files are English, so "fr"
+    swaps each question for its hand-written rendering in EXAMPLE_TRANSLATIONS_FR
+    and any other language returns the eval file's own wording. A question with no
+    rendering keeps its original text rather than disappearing.
     """
     questions = example_questions(eval_path, n)
-    if ui_lang != "en":
+    if ui_lang != "fr":
         return questions
-    return [EXAMPLE_TRANSLATIONS_EN.get(q, q) for q in questions]
+    return [EXAMPLE_TRANSLATIONS_FR.get(q, q) for q in questions]
 
 
 def detect_language(text: str) -> str:

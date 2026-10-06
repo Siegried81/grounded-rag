@@ -19,7 +19,8 @@ limitation — is in [`technical_deep_dive.md`](technical_deep_dive.md).
 **Query (`cli.py`, `app.py` Streamlit, `api/main.py` FastAPI + `web/` React)**
 
 4. **Retrieve** (`rag/retrieve.py`): the question is embedded; dense cosine and BM25
-   rankings are fused (RRF) and diversified (MMR). See "Cite or refuse" below.
+   rankings are fused (RRF) and diversified (MMR), both implemented in
+   `rag/fusion.py`. See "Cite or refuse" below.
 5. **Answer** (`rag/answer.py` + `rag/llm.py`): surviving passages go to the LLM in
    one structured call, each wrapped in a `<source>` fence that marks it as
    untrusted data (prompt-injection mitigation); the model must answer only from
@@ -29,9 +30,13 @@ limitation — is in [`technical_deep_dive.md`](technical_deep_dive.md).
 6. **Verify** (`rag/verify.py`): every `[S#]` is checked to be real and a lexical
    grounding score is computed, on every answer.
 
-**Evaluation (`scripts/`)**: retrieval metrics (`run_eval.py`), answer-level
-metrics (`run_answer_eval.py`) and an adversarial red-team suite
-(`run_redteam.py`).
+**Evaluation (`scripts/`)**: four suites — retrieval metrics (`run_eval.py`,
+scored by `rag/metrics.py`), answer-level metrics (`run_answer_eval.py`,
+`rag/answer_metrics.py`), an adversarial red-team suite (`run_redteam.py`) and a
+phrasing-robustness check (`run_phrasing_eval.py`). The first and last need only
+local embeddings; the other two make one live LLM call per question. Every rate is
+printed with a 95% Wilson interval from `rag/stats.py`, and each live run writes
+its per-question rows to `logs/`.
 
 ## Cite or refuse
 
@@ -42,6 +47,23 @@ mode, since hybrid fusion and MMR only reorder already-relevant passages. The
 threshold is the one setting that changes what an answer means (too low → confident
 but ungrounded text; too high → answerable questions refused) and is tuned per
 embedding model in `config.py`.
+
+**What the gate does not do.** Over 61 live questions it has never fired. The
+unanswerable eval questions score 0.599–0.888 top cosine and the answerable ones
+0.611–0.910, so no threshold separates them: cosine measures whether a passage is
+*about* the question, and an unanswerable question about the corpus's own subject
+still is. What refuses in practice is the model following the "answer only from the
+sources" instruction. Both live reports therefore print `refusals: gate / model`
+next to every refusal metric, so a refusal score is never read as evidence about
+the threshold.
+
+**And what verification does not do.** `rag/verify.py` checks that a citation
+exists, points inside the retrieved set, and shares vocabulary with the answer —
+none of which is a check on truth. The worked example is `aa-03`, in
+[`technical_deep_dive.md`](technical_deep_dive.md) §8.2: a fine quoted correctly
+from the wrong article's scope, `verify_ok: true`. Read it
+before trusting a green verification badge; it is why a source card's filename
+opens the whole cited document, not just the excerpt.
 
 ## Why a NumPy store, not a vector DB
 

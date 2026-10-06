@@ -1,9 +1,0 @@
-## Timeline (mise à jour août 2026)
-
-- **2 fév. 2025** ✅ déjà actif : interdiction des pratiques à risque inacceptable + obligation de "littératie IA" pour les employés
-- **2 août 2025** ✅ déjà actif : obligations GPAI (doc technique, transparence, désignation des autorités nationales)
-- **2 août 2026** ⚠️ point clé : les règles de transparence Article 50 (déclarer les chatbots/contenus IA générés) entrent en vigueur comme prévu
-- **2 déc. 2026** : délai pour les systèmes déjà sur le marché avant août 2026 pour se mettre en conformité Article 50(2), et nouvelles dispositions Article 5 sur la responsabilité
-- **2 déc. 2027** (au lieu du 2 août 2026 initialement) : obligations pour les systèmes **haut risque Annexe III** (usage) — reporté de 16 mois via le "Digital Omnibus on AI"
-- **2 août 2027** : conformité pour les GPAI déjà sur le marché + systèmes IA dans les grands systèmes informatiques (Annexe X)
-- **2 août 2030/2031** : échéances résiduelles pour certains systèmes legacy

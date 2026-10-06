@@ -1,7 +1,0 @@
-## Le changement majeur de 2026 : le "Digital Omnibus on AI"
-
-Ce processus visant à transformer les amendements en loi devait être finalisé pour le 2 août 2026. Raison du report : les organismes de normalisation européens ont pris du retard dans la livraison des standards clés, beaucoup étant désormais attendus vers la fin 2026, ce qui créait un risque d'obligations impossibles à respecter faute d'outils de conformité.
-
-Résultat concret : pour les systèmes haut risque Annexe III (basés sur l'usage), les obligations sont reportées du 2 août 2026 au 2 décembre 2027.
-
-Attention cependant : l'échéance du 2 août 2026 n'est pas totalement annulée — les règles de transparence de l'Article 50 (déclarer les chatbots IA et les contenus synthétiques aux utilisateurs) entrent en vigueur comme prévu, avec des sanctions financières importantes en cas de non-conformité.
