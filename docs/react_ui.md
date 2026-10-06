@@ -14,7 +14,7 @@ Both UIs read the same `.env` and indexes, so they behave identically.
 - The Python venv with `requirements.txt` installed (it now includes `fastapi`,
   `uvicorn` and `httpx`).
 - Node.js 18+ and npm, for the React app only.
-- At least one built index (`python cli.py ingest --corpus ai_act`).
+- At least one built index (`python cli.py ingest --corpus ai_act_sections`).
 
 ## Development (two processes, hot reload)
 
@@ -55,10 +55,18 @@ then `docker compose --profile api up --build` and open http://localhost:8002.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/health` | Liveness check (`{"status": "ok"}`). |
-| GET | `/api/config[?corpus=NAME]` | Badges (LLM provider and model, embedding provider, default retrieval mode, refusal threshold, grounding bar), `llm_key_configured` (a boolean only, never a key), pipeline steps and limitations. |
-| GET | `/api/corpora` | Indexed corpora with documents, chunks, PDF pages, detected languages, file list, available modes and 4 example questions. |
+| GET | `/api/config[?corpus=NAME][&ui_lang=en\|fr]` | Badges (LLM provider and model, embedding provider, default retrieval mode, refusal threshold, grounding bar), `llm_key_configured` (a boolean only, never a key), pipeline steps, limitations and the selectable answer `languages`. |
+| GET | `/api/corpora[?ui_lang=en\|fr]` | Indexed corpora with documents, chunks, PDF pages, detected languages, file list, available modes and 4 example questions (`examples_by_language`). |
 | GET | `/api/document?corpus=NAME&source=FILE[&q=QUESTION]` | One cited document in full, so a citation can be read in context: `{corpus, source, chars, shown_chars, truncated, text_html}`. `q` only decides which words are marked. |
-| POST | `/api/ask` | `{corpus, question, mode?, top_k?, use_mmr?}` -> answer, refusal, sources, verification, latency and error. |
+| POST | `/api/ask` | `{corpus, question, mode?, top_k?, use_mmr?, language?, ui_lang?}` -> answer, refusal, sources, verification, latency and error. |
+
+`ui_lang` (`en` / `fr`, default `en`) selects the language of the text the API
+*generates itself* — the refusal and grounding explanations, the pipeline steps and
+the limitations. `language` on `/api/ask` is a different setting: it is the
+language the **model** writes the answer in (`auto` / `en` / `fr` / `nl`, default
+`config.DEFAULT_ANSWER_LANGUAGE`). They are deliberately separate, because reading
+the interface in French does not mean wanting French answers about English
+documents (see the phrasing results in the deep dive, §8.5).
 
 `/api/config` and `/api/corpora` work without any LLM key or a running Ollama:
 they load the indexes but never embed or call a model. `/api/document` needs no
@@ -72,6 +80,9 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 
 `POST /api/ask` response fields:
 
+- `question`, `language` and `settings` (`{mode, top_k, use_mmr}`): the request as
+  the server resolved it, so a stored response says which settings produced it
+  rather than which ones the client meant to send.
 - `answer`: the LLM text with inline `[S#]` markers, or `null`.
 - `refused` and `refusal`: `{best_score, threshold, explanation, closest[]}`. The
   gate is the dense cosine threshold from `SCORE_THRESHOLD`; it is not a request
@@ -93,7 +104,13 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 ## What the page shows
 
 - A header with the cite-or-refuse rule and badges for the configuration (an
-  amber badge when no LLM key is set).
+  amber badge when no LLM key is set), plus two language controls: an interface
+  toggle (EN / FR) and an "Answer in" select (auto / English / French / Dutch).
+  Every interface string lives in `web/src/i18n.js`, keyed by the same id in both
+  languages, so components hold no display text; the chosen interface language is
+  remembered in `localStorage` and sent as `ui_lang` so the explanations the API
+  generates match. `web/src/markdown.jsx` renders the inline Markdown subset
+  (`**bold**`, `` `code` ``) those strings and the model's answers may use.
 - A sidebar with the corpus selector and stats, the retrieval settings (mode,
   top_k, MMR), the read-only refusal threshold, About / How it works,
   Limitations, and Clear conversation. On narrow screens it becomes a drawer.
@@ -121,5 +138,11 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 
 ## Tests
 
-`tests/test_api.py` drives the API with FastAPI's `TestClient`. The index,
-embedder and LLM are replaced by fakes, so it makes no network calls.
+`tests/test_api.py` — **44 tests** — drives the API with FastAPI's `TestClient`.
+The index, embedder and LLM are replaced by fakes, so it makes no network calls
+and needs no key. It is part of the 339-test suite (`python -m pytest -q`).
+
+The React side has no test runner: `web/src` is covered only by the API contract
+above and by hand. `markdown.jsx` is the one place that would matter most, and it
+is written to be safe by construction — every part is emitted as a React text
+node, never as raw HTML — rather than proven so by a test.

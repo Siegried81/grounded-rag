@@ -7,6 +7,7 @@ One JSON object per line makes it trivial to append safely and to analyse later
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -64,3 +65,27 @@ def read_log(path: Path) -> list[dict]:
         except json.JSONDecodeError:
             continue
     return records
+
+
+def never_crash_on_console_encoding() -> None:
+    """Make stdout/stderr drop unencodable characters instead of raising.
+
+    The eval scripts print question and answer text verbatim. A Windows console
+    is cp1252, EUR-Lex and the models emit U+2011 (non-breaking hyphen), U+202F
+    (narrow no-break space) and U+2019 (curly apostrophe), and `print` then dies
+    with a UnicodeEncodeError — after the LLM calls for that run have already
+    been made and paid for. Replacing the character costs one glyph of a printed
+    line; raising costs the run.
+
+    `backslashreplace` rather than `replace` so the lost character is still
+    identifiable in the transcript. The results JSONL is written with an explicit
+    utf-8 encoding and is unaffected either way.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        # A replaced stream (pytest's capture, a notebook) may not be a
+        # TextIOWrapper, and a console that cannot be reconfigured is not a
+        # reason to fail before the run starts.
+        try:
+            stream.reconfigure(errors="backslashreplace")
+        except (AttributeError, ValueError, OSError):
+            pass

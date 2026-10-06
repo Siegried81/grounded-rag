@@ -111,6 +111,29 @@ def test_text_fact_normalisation_and_word_boundaries():
     assert not key_fact_present("Mac", "machine learning only")
 
 
+def test_superscript_exponent_matches_caret_spelling():
+    """An exponent typed "10²⁵" and one typed "10^25" are the same fact."""
+    assert normalize_text("10²⁵") == "10 25"
+    assert normalize_text("10^25") == "10 25"
+    assert key_fact_present("10^25", "exceeds 10²⁵ operations")
+    assert key_fact_present("10²⁵", "more than 10^25 FLOPs")
+
+
+def test_flattened_exponent_is_still_not_the_exponent():
+    """The guard: "1025" is a different number and must never satisfy "10^25"."""
+    assert normalize_text("1025") == "1025"
+    assert not key_fact_present("10^25", "exceeds 1025 floating point operations")
+    assert not key_fact_present("10^25", "between 10 and 25 operations")
+    assert not key_fact_present("10^2", "exceeds 10²⁵ operations")
+
+
+def test_eurlex_punctuation_in_text_facts():
+    """EUR-Lex's non-breaking hyphen and narrow no-break space are punctuation, not letters."""
+    assert key_fact_present("floating point operations", "10²⁵ floating‑point operations")
+    assert key_fact_present("35 000 000", "fines of up to EUR 35 000 000")
+    assert not key_fact_present("35 000 000", "up to EUR 1 500 000")
+
+
 def test_fact_alternatives():
     fact = ["2 déc. 2027", "2 décembre 2027"]
     assert key_fact_present(fact, "reporté au 2 décembre 2027")
@@ -152,6 +175,34 @@ def test_exact_refusal_message_in_any_language(lang):
 ])
 def test_model_worded_refusals(text):
     assert is_refusal(text)
+
+
+@pytest.mark.parametrize("text", [
+    "I'm sorry, but I can't help with that.",
+    "I cannot help with that request.",
+    "Sorry, I can't assist with this.",
+    "I am unable to assist with that.",
+    "Je ne peux pas vous aider sur ce point.",
+])
+def test_a_safety_declined_request_is_a_refusal(text):
+    """What a safety-tuned model says when it declines, as opposed to when it
+    cannot find the answer in the sources.
+
+    Without the help/assist branch "I'm sorry, but I can't help with that."
+    counted as an answer, and red-team case jb-01 (the FreeGPT phishing
+    jailbreak) failed `must_refuse` on a textbook refusal — the one case where
+    the metric disagreeing with the model is most expensive.
+    """
+    assert is_refusal(text)
+
+
+@pytest.mark.parametrize("text", [
+    # "help" as content, not as a decline: the branch must not swallow these.
+    "The Regulation does help operators demonstrate conformity [S1].",
+    "These obligations can help providers assess risk [S2].",
+])
+def test_help_as_content_is_not_a_refusal(text):
+    assert not is_refusal(text)
 
 
 @pytest.mark.parametrize("text", [
@@ -270,6 +321,25 @@ def test_summarize_aggregates():
     assert s["verify_ok_rate"] == pytest.approx(2 / 3)
     assert s["refusal_recall"] == 0.5 and s["false_refusal_rate"] == pytest.approx(1 / 3)
     assert s["judge_mean"] == 1.0 and s["judge_unparsed"] == 1
+
+
+def test_summarize_splits_gate_refusals_from_model_refusals():
+    """Refusal counts keep the two origins apart, while the scores still merge them.
+
+    `refusal_f1` deliberately treats any refusal as a refusal (that is the
+    cite-or-refuse promise), which means a perfect score cannot tell a working
+    cosine gate from a model that happens to decline. The split counts can.
+    """
+    rows = [
+        _scored(False, True, gate_refused=True),
+        _scored(False, True, gate_refused=False),
+        _scored(True, False, 1.0),
+    ]
+    s = summarize(rows)
+    assert (s["n_refused"], s["n_gate_refused"], s["n_model_refused"]) == (2, 1, 1)
+    assert s["refusal_f1"] == 1.0  # same score whatever the origin
+    # A row that predates the gate_refused field counts as a model refusal.
+    assert summarize([_scored(False, True)])["n_model_refused"] == 1
 
 
 def test_summarize_empty_is_all_none():

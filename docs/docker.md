@@ -29,15 +29,15 @@ Run it once per corpus; the index lands in the `rag_index` volume.
 # Embeddings from the bundled Ollama service
 docker compose --profile local-llm up -d ollama
 docker compose --profile local-llm exec ollama ollama pull nomic-embed-text
-docker compose --profile tools --profile local-llm run --rm ingest --corpus ai_act
-docker compose --profile tools --profile local-llm run --rm ingest --corpus filings
-# The evaluation sets and the demo use the per-section corpora:
 docker compose --profile tools --profile local-llm run --rm ingest --corpus ai_act_sections
 docker compose --profile tools --profile local-llm run --rm ingest --corpus filings_sections
 ```
 
-Arguments after `ingest` replace the default `--corpus ai_act`, because the
-service's entrypoint is `python cli.py ingest`.
+Arguments after `ingest` replace the default `--corpus ai_act_sections`, because
+the service's entrypoint is `python cli.py ingest`. There is no longer an
+`ai_act` corpus: it held the same text as `ai_act_sections` (see
+`data/ai_act_sections/README.md`). `data/filings/` is a provenance folder holding
+the raw SEC submission and is not meant to be ingested on its own.
 
 ## 3. Run the app
 
@@ -79,7 +79,7 @@ memory, so after an `ingest` run restart it: `docker compose --profile api resta
 **Ask from the CLI inside the container**
 
 ```bash
-docker compose run --rm app python cli.py ask --corpus ai_act "What are the risk tiers?"
+docker compose run --rm app python cli.py ask --corpus ai_act_sections "Which AI practices are prohibited?"
 ```
 
 ## How the Ollama URL is wired

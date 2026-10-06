@@ -105,13 +105,21 @@ def test_language_lists_agree_across_modules():
     assert set(config.SUPPORTED_UI_LANGUAGES) == {"en", "fr"}
 
 
-def test_example_translations_cover_shipped_ai_act_examples():
-    """Every example the UI picks for the French corpora has an English translation."""
-    for name in ("ai_act", "ai_act_sections"):
+def test_example_translations_cover_shipped_examples():
+    """Every example the UI picks has a French rendering.
+
+    The direction is the reverse of what it was: both corpora and both eval
+    files are English now (Regulation (EU) 2024/1689 and the Apple 10-K), so the
+    hand-written renderings are what the French interface shows, and nothing is
+    translated for the English one. Each corpus contributes four examples and no
+    question is shared, so the table holds exactly eight.
+    """
+    for name in ("ai_act_sections", "filings_sections"):
         path = config.ROOT / "eval" / f"{name}_eval.jsonl"
-        fr = ui.localized_examples(path, "fr")
         en = ui.localized_examples(path, "en")
-        assert len(fr) == len(en) == 4
-        assert all(q in ui.EXAMPLE_TRANSLATIONS_EN for q in fr)
-        assert en == [ui.EXAMPLE_TRANSLATIONS_EN[q] for q in fr]
-    assert len(ui.EXAMPLE_TRANSLATIONS_EN) == 7  # one question is shared by both corpora
+        fr = ui.localized_examples(path, "fr")
+        assert len(en) == len(fr) == 4
+        assert en == ui.example_questions(path)  # English is the files' own wording
+        assert all(q in ui.EXAMPLE_TRANSLATIONS_FR for q in en)
+        assert fr == [ui.EXAMPLE_TRANSLATIONS_FR[q] for q in en]
+    assert len(ui.EXAMPLE_TRANSLATIONS_FR) == 8
