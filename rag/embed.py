@@ -1,4 +1,4 @@
-"""Embedder implementations (fake, Ollama, hosted) and a config-driven factory.
+"""Embedder implementations (fake, Ollama, hosted, in-process) and a config-driven factory.
 
 Each class satisfies the `Embedder` protocol from `rag.types`, so the rest of the
 pipeline never knows which backend is in use. `get_embedder` is the single place
@@ -102,6 +102,58 @@ class HostedEmbedder:
         return [d["embedding"] for d in resp.json()["data"]]
 
 
+class SentenceTransformerEmbedder:
+    """Embedder that runs a sentence-transformers model in this process.
+
+    The other two backends are servers: `OllamaEmbedder` needs a daemon listening
+    on a port, `HostedEmbedder` needs the network and a key. Both are things that
+    can be down when it matters. This one holds the model in memory, which makes
+    retrieval work with nothing else running - and removes one HTTP round trip per
+    batch, which is the whole cost of embedding a corpus.
+
+    What it costs instead: a torch install and a model download the first time the
+    name is seen. So the import is LAZY - the module must stay importable, and the
+    test suite must stay runnable, on a machine that has neither.
+
+    The model name travels into `self.model`, which the store records beside every
+    vector. Two embedding spaces are not comparable, and the store refuses to mix
+    them rather than returning a plausible nearest neighbour from the wrong one.
+    """
+
+    def __init__(self, model: str):
+        self._name = model
+        self._encoder = None  # built on first use, see embed()
+
+    @property
+    def model(self) -> str:
+        """Identify the backing model, exactly as configured."""
+        return self._name
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return one normalised vector per input text, in the same order.
+
+        `normalize_embeddings=True` because the rest of the pipeline compares with
+        a dot product and treats it as cosine similarity: unnormalised vectors
+        would make that a length-weighted score, which ranks long chunks higher
+        for being long.
+        """
+        if self._encoder is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError as exc:
+                raise RuntimeError(
+                    "EMBED_PROVIDER=sentence_transformers needs the "
+                    "`sentence-transformers` package (which pulls in torch). "
+                    "Install it, or use EMBED_PROVIDER=ollama for the daemon "
+                    "backend or `fake` for tests."
+                ) from exc
+            self._encoder = SentenceTransformer(self._name)
+        vectors = self._encoder.encode(
+            texts, normalize_embeddings=True, convert_to_numpy=True
+        )
+        return [[float(x) for x in row] for row in vectors]
+
+
 def get_embedder(provider: str | None = None) -> Embedder:
     """Build the embedder for `provider` (default: config.EMBED_PROVIDER).
 
@@ -113,6 +165,8 @@ def get_embedder(provider: str | None = None) -> Embedder:
         return FakeEmbedder()
     if provider == "ollama":
         return OllamaEmbedder(config.OLLAMA_URL, config.OLLAMA_EMBED_MODEL)
+    if provider == "sentence_transformers":
+        return SentenceTransformerEmbedder(config.ST_EMBED_MODEL)
     if provider == "hosted":
         return HostedEmbedder(
             config.HOSTED_EMBED_BASE_URL,

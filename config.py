@@ -72,12 +72,22 @@ if DEFAULT_ANSWER_LANGUAGE not in SUPPORTED_ANSWER_LANGUAGES:
 SUPPORTED_UI_LANGUAGES = ("en", "fr")
 
 # --- Embedding backend -------------------------------------------------------
-EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "ollama")  # ollama | hosted | fake
+EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "ollama")
+# ollama | hosted | sentence_transformers | fake
+#
+# `sentence_transformers` runs the model IN-PROCESS instead of calling a
+# daemon: one less thing to be down during a demo, and no HTTP round trip per
+# batch. It costs a model download on first use and a torch install.
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_EMBED_MODEL = os.getenv("OLLAMA_EMBED_MODEL", "nomic-embed-text")
 HOSTED_EMBED_BASE_URL = os.getenv("HOSTED_EMBED_BASE_URL", "")
 HOSTED_EMBED_MODEL = os.getenv("HOSTED_EMBED_MODEL", "")
 HOSTED_EMBED_API_KEY = os.getenv("HOSTED_EMBED_API_KEY", "")
+# A small, CPU-fast model by default: 384 dimensions, about 90 MB, and the
+# usual baseline for sentence similarity. The name is recorded with every
+# vector, so changing it is a new embedding space and the store will refuse to
+# mix the two rather than silently comparing them.
+ST_EMBED_MODEL = os.getenv("ST_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 # --- Generation backend ------------------------------------------------------
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")  # groq | openrouter | ollama
