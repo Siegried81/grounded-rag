@@ -209,6 +209,13 @@ python cli.py ask --corpus ai_act_sections "What are the obligations for high-ri
 indexed with another embedding model than the configured one is reported as an
 `index` error instead of answering with meaningless scores: re-run `ingest`.
 
+`EMBED_PROVIDER=sentence_transformers` is the fourth backend: it loads the model
+into this process rather than calling a daemon, so retrieval works with nothing
+else running and there is no HTTP round trip per batch. It needs
+`pip install sentence-transformers` (which pulls in torch), the import is lazy so
+the suite runs without it, and switching to it is a new embedding space — re-run
+`ingest`, or the store will refuse to mix the vectors.
+
 **React UI** — two terminals, then open http://localhost:5180 (API on 8002):
 
 ```bash
@@ -240,12 +247,12 @@ live LLM call per question:
 | Role       | Default                              | Fallbacks                       | `.env`           |
 | ---------- | ------------------------------------ | ------------------------------- | ---------------- |
 | Generation | Groq `openai/gpt-oss-120b` (1–5 keys)| OpenRouter, Ollama `llama3.2:3b`| `LLM_PROVIDER`   |
-| Embeddings | Ollama `nomic-embed-text` (local)    | any OpenAI-compatible endpoint  | `EMBED_PROVIDER` |
+| Embeddings | Ollama `nomic-embed-text` (local)    | `sentence_transformers` in-process, or any OpenAI-compatible endpoint | `EMBED_PROVIDER` |
 With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **339 passing**, the whole suite offline (fake embedder,
+`python -m pytest -q` — **352 passing**, the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations

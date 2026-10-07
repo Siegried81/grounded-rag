@@ -8,7 +8,14 @@ import math
 import pytest
 
 from rag import embed
-from rag.embed import FakeEmbedder, HostedEmbedder, OllamaEmbedder, get_embedder
+import config
+from rag.embed import (
+    FakeEmbedder,
+    HostedEmbedder,
+    OllamaEmbedder,
+    SentenceTransformerEmbedder,
+    get_embedder,
+)
 
 
 class FakeResponse:
@@ -86,3 +93,59 @@ def test_get_embedder_default_uses_config(monkeypatch):
 def test_get_embedder_unknown():
     with pytest.raises(ValueError):
         get_embedder("nope")
+
+
+# --- the in-process backend -----------------------------------------------------
+
+def test_sentence_transformers_is_built_by_the_factory(monkeypatch):
+    """A fourth provider, selected the same way as the other three."""
+    monkeypatch.setattr(config, "ST_EMBED_MODEL", "some-org/some-model")
+    e = get_embedder("sentence_transformers")
+    assert isinstance(e, SentenceTransformerEmbedder)
+    assert e.model == "some-org/some-model"
+
+
+def test_the_model_is_not_loaded_until_something_is_embedded(monkeypatch):
+    """The import is lazy on purpose: `sentence-transformers` pulls in torch, and
+    this module has to stay importable - and the suite runnable - on a machine
+    that has neither. Constructing the embedder must therefore touch nothing."""
+    e = SentenceTransformerEmbedder("some-org/some-model")
+    assert e.model == "some-org/some-model"  # no download, no import, no error
+
+
+def test_a_missing_package_names_the_alternatives(monkeypatch):
+    """The failure a reader meets first, so it has to say what to do instead
+    rather than surfacing an ImportError from three frames down."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_sentence_transformers(name, *args, **kwargs):
+        if name.startswith("sentence_transformers"):
+            raise ImportError("no module named sentence_transformers")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", no_sentence_transformers)
+    with pytest.raises(RuntimeError, match="sentence-transformers"):
+        SentenceTransformerEmbedder("some-org/some-model").embed(["hello"])
+
+
+def test_vectors_are_normalised_and_ordered(monkeypatch):
+    """Two properties the rest of the pipeline depends on.
+
+    Order, because `embed` is called on a batch and the vectors are zipped back
+    onto their chunks positionally. Normalisation, because retrieval compares with
+    a dot product and calls the result cosine similarity - unnormalised vectors
+    would make it a length-weighted score and rank long chunks higher for being
+    long.
+    """
+
+    class _Encoder:
+        def encode(self, texts, normalize_embeddings=False, convert_to_numpy=False):
+            assert normalize_embeddings, "the pipeline treats the dot product as cosine"
+            return [[1.0, 0.0, 0.0] if t == "a" else [0.0, 1.0, 0.0] for t in texts]
+
+    e = SentenceTransformerEmbedder("some-org/some-model")
+    e._encoder = _Encoder()
+    out = e.embed(["a", "b", "a"])
+    assert out == [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]
