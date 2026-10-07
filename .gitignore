@@ -8,3 +8,6 @@ logs/
 
 claude_*.txt
 *transcript*.txt
+
+# Local working state, never committed: see _build/STATE.md
+_build/
