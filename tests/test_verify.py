@@ -188,3 +188,50 @@ def test_abbreviation_inside_markdown_emphasis_is_not_a_split():
             "smartphones [S1].")
     r = verify_answer(text, [court])
     assert len(r.uncited_sentences) == 1 and r.uncited_sentences[0].startswith("The DOJ filed")
+
+
+# --- figures and negations against the sources a sentence cites ---------------
+#
+# A valid citation beside a wrong number used to pass: "999 hours [S1]" against a
+# source saying 24 hours scored above the grounding threshold. Figures are the
+# one thing a lexical check can judge with confidence, so they gate `ok`.
+# Negation is a heuristic and gates `strict_ok` only.
+
+NUMERIC_SOURCES = [
+    _src("The seller must respond within 24 hours and refund up to 1,000 euros.", 1),
+    _src("Article 5 applies to systems placed on the market after 2 August 2026.", 2),
+]
+
+
+def test_a_figure_the_cited_source_does_not_carry_fails_the_answer():
+    r = verify_answer("The seller must respond within 999 hours [S1].", NUMERIC_SOURCES)
+    assert r.unsupported_numbers == ["999"]
+    assert not r.ok
+
+
+def test_figures_present_in_the_cited_source_pass_whatever_the_separators():
+    r = verify_answer("The seller must respond within 24 hours and refund up to 1000 euros [S1].", NUMERIC_SOURCES)
+    assert r.unsupported_numbers == []
+    assert r.ok
+
+
+def test_a_figure_is_checked_against_the_sentence_s_own_citation_not_the_union():
+    """24 is in S1; a sentence that attaches it to S2 is still wrong."""
+    r = verify_answer("Article 5 applies after 24 hours [S2].", NUMERIC_SOURCES)
+    assert r.unsupported_numbers == ["24"]
+
+
+def test_a_citation_marker_is_not_a_figure():
+    r = verify_answer("The seller must respond within 24 hours [S1].", NUMERIC_SOURCES)
+    assert "1" not in r.unsupported_numbers
+
+
+def test_a_negation_the_source_does_not_carry_is_reported_and_blocks_strict_only():
+    r = verify_answer("The seller must not respond within 24 hours [S1].", NUMERIC_SOURCES)
+    assert r.negation_mismatches and r.ok and not r.strict_ok
+
+
+def test_the_report_names_the_figures_and_the_negation():
+    r = verify_answer("The seller must not respond within 999 hours [S1].", NUMERIC_SOURCES)
+    text = format_report(r)
+    assert "figures absent" in text and "999" in text and "negation" in text
