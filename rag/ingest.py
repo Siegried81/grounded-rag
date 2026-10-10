@@ -128,3 +128,22 @@ def ingest_corpus(corpus: str, embedder=None, chunker: str | None = None):
     # Keyword index alongside the vectors, so `ask` can fuse both channels.
     BM25Index.build(chunks).save(config.bm25_path(corpus))
     return store
+
+
+def ensure_index(corpus: str, embedder=None) -> bool:
+    """Build the index of a corpus only when it is missing; True when it was built.
+
+    This is the start-up path of a deployment with no build step and no
+    persistent disk (Streamlit Community Cloud, Render's free plan): the corpora
+    ship with the code, the index does not, and every cold start has to make it
+    again. Presence is judged on the vector store's two files, so a half-written
+    index from an interrupted start is rebuilt rather than loaded. An index built
+    with another embedder is left alone here: the store reports that mismatch at
+    query time, where the configured model is known.
+    """
+    from rag.store import VectorStore
+
+    if VectorStore.exists(config.index_path(corpus)):
+        return False
+    ingest_corpus(corpus, embedder=embedder)
+    return True

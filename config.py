@@ -21,6 +21,15 @@ ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "data"       # one subfolder per corpus, e.g. data/ai_act
 INDEX_DIR = ROOT / "index"     # persisted vector stores, one subfolder per corpus
 
+# --- Start-up ingestion ------------------------------------------------------
+# Corpora (folder names under data/, comma-separated) whose index the Streamlit
+# UI builds itself when it is missing. Empty, the default, means never: on a
+# workstation a missing index stays a visible "run ingest" message instead of a
+# silent embedding bill. A platform with no build step and no persistent disk
+# (Streamlit Community Cloud) has nowhere else to run `cli.py ingest`, so it
+# sets this to the corpora it serves and rebuilds them on every cold start.
+AUTO_INGEST = tuple(c.strip() for c in os.getenv("AUTO_INGEST", "").split(",") if c.strip())
+
 # --- Chunking ----------------------------------------------------------------
 CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", "900"))        # characters per passage
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))  # characters shared between neighbours
