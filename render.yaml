@@ -1,0 +1,34 @@
+# Render blueprint: the Streamlit UI as one Docker web service.
+#
+# Render has no Ollama and no persistent disk on the free plan, so the
+# embedder is a hosted OpenAI-compatible endpoint (set the three HOSTED_* values
+# in the dashboard; sync: false keeps them out of this file) and both indexes
+# are built at start, before Streamlit comes up. The first start takes a few
+# minutes while the corpora are embedded; later starts repeat it.
+#
+# Not exercised by CI: a deploy is the test. The API + React UI variant is
+# the same image with dockerCommand set to uvicorn (see docs/docker.md).
+services:
+  - type: web
+    name: grounded-rag
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /_stcore/health
+    dockerCommand: >-
+      sh -c "python cli.py ingest --corpus ai_act_sections
+      && python cli.py ingest --corpus filings_sections
+      && exec python -m streamlit run app.py --server.port=$PORT --server.address=0.0.0.0"
+    envVars:
+      - key: EMBED_PROVIDER
+        value: hosted
+      - key: LLM_PROVIDER
+        value: groq
+      - key: HOSTED_EMBED_BASE_URL
+        sync: false
+      - key: HOSTED_EMBED_MODEL
+        sync: false
+      - key: HOSTED_EMBED_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false

@@ -15,8 +15,9 @@ logs/
 **/*.pyc
 .pytest_cache/
 .streamlit/secrets.toml
-# Corpora are bind-mounted read-only at runtime, so they are not baked in.
-data/
+# The corpora (11 MB of text) travel in the image: a platform without a bind
+# mount (Render) builds the indexes at start from them. docker-compose.yml
+# still mounts ./data read-only over them, so local edits win there.
 Dockerfile
 docker-compose.yml
 .dockerignore
