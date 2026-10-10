@@ -43,5 +43,7 @@ EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD ["python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=4).status == 200 else 1)"]
 
-# Exec form: Streamlit is PID 1 and receives SIGTERM directly on `docker stop`.
-CMD ["python", "-m", "streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Streamlit listens on $PORT when a platform sets one (Render does), 8501
+# otherwise. `exec` keeps Streamlit as PID 1 so it receives SIGTERM directly
+# on `docker stop`, which the shell form would otherwise swallow.
+CMD exec python -m streamlit run app.py --server.port="${PORT:-8501}" --server.address=0.0.0.0
