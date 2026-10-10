@@ -26,9 +26,12 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
   zero-width-space forms are rewritten to `[S1]`, so they are verified like any
   other citation (this took verify-ok from 0.21 to 1.00 on the same answers).
 - **Verification on every answer**: hallucinated source numbers, uncited claims,
-  and a lexical grounding score. It proves a claim is *traceable*, not that it is
-  *true* — [`aa-03`](#a-wrong-answer-that-passed-verification-aa-03) is a worked
-  example of a wrong answer that passed it.
+  a lexical grounding score, and every figure a sentence states checked against
+  the sources that sentence cites (a figure the sources do not carry fails the
+  answer; a negation they do not carry blocks `strict_ok`). It proves a claim is
+  *traceable* and its figures *present*, not that it is *true* —
+  [`aa-03`](#a-wrong-answer-that-passed-verification-aa-03) is a worked example
+  of a wrong answer that passed it.
 - **Every citation is readable in context**: a source card shows a window around
   the match, and its filename opens the whole cited document, scrolled to the
   first match — an excerpt alone cannot tell you whether the answer read it right.
@@ -178,11 +181,11 @@ It passed because the figure is real and the citation is honest. `[S1]` was
 **Union institutions, bodies, offices and agencies**. Article 99 is the one that
 governs everyone else. The model quoted the right number from the wrong article's
 scope.
-Verification checks that a citation exists, points inside the retrieved set, and
-shares vocabulary with the answer. None of those three can notice that the cited
-passage governs a different class of offender, so **"verified" here means
-*traceable*, not *true*** — which is the whole reason every source card in both
-UIs opens the full document.
+Verification checks that a citation exists, points inside the retrieved set,
+shares vocabulary with the answer, and carries every figure the sentence states.
+None of those four can notice that the cited passage governs a different class
+of offender, so **"verified" here means *traceable*, not *true*** — which is the
+whole reason every source card in both UIs opens the full document.
 
 A reader who wants one worked example of what this design does and does not
 guarantee should read this one. `diagnosis: generation` marks it in the log: the
@@ -230,7 +233,14 @@ under `~/.nvm` before `npm install`.
 **Streamlit**: `python -m streamlit run app.py` (port 8501) · **Docker**:
 `docker compose up --build` (Streamlit on :8501) or
 `docker compose --profile api up --build` (API + built React UI on :8002);
-see [docs/docker.md](docs/docker.md) for the bundled Ollama.
+see [docs/docker.md](docs/docker.md) for the bundled Ollama. **Render**:
+`render.yaml` deploys the same image with a hosted embedder
+(`EMBED_PROVIDER=hosted`, the three `HOSTED_EMBED_*` values and `GROQ_API_KEY`
+set in the dashboard) and builds both indexes at start; the image carries the
+corpora for that, and the container listens on `$PORT` when a platform sets
+one. Not exercised by CI: the first deploy is the test. **Streamlit Community
+Cloud** is not a target: `app.py` expects built indexes and that platform has
+no build step to make them.
 
 **Evaluations** — the first two need only local embeddings, the last two make one
 live LLM call per question:

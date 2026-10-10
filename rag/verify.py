@@ -41,6 +41,29 @@ _ABBREV_END_RE = re.compile(
     re.IGNORECASE,
 )
 _MIN_CLAIM_WORDS = 4  # a sentence needs MORE than this many content words to count as a claim
+# A figure in the answer: digits with an optional decimal part. Thousand
+# separators (1,000 / 1 000 / 1.000) are stripped before comparing, so "24 months"
+# matches "24", "1,000" matches "1000", but "999" never matches "24". Years and
+# article numbers are figures too, which is the point: a wrong article is a wrong
+# claim.
+_NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
+_THOUSANDS_RE = re.compile(r"(?<=\d)[ ,.](?=\d{3}\b)")
+# Negation markers of the three answer languages. A cited sentence that negates
+# while none of its sources negates anything is read as a contradiction
+# candidate: "does not cover" against "covers". A heuristic, so it is reported
+# and gates strict_ok only.
+_NEGATION_RE = re.compile(
+    r"\b(?:not|never|no|none|nor|cannot|without|n't"
+    r"|ne|pas|jamais|aucun|aucune|ni|sans"
+    r"|niet|geen|nooit|zonder)\b",
+    re.IGNORECASE,
+)
+
+
+def _numbers(text: str) -> set[str]:
+    """Normalised figures in `text`: separators removed, decimal comma as a point."""
+    cleaned = _THOUSANDS_RE.sub("", _CITATION_RE.sub(" ", text))
+    return {n.replace(",", ".").rstrip("0").rstrip(".") or "0" for n in _NUMBER_RE.findall(cleaned)}
 
 # Function words of the three answer languages (articles, prepositions, pronouns,
 # auxiliaries) plus the one-letter leftovers of apostrophe splitting (l', d',
@@ -120,10 +143,20 @@ class VerificationReport:
     # ok: no hallucinated citation and grounding above the threshold. Unchanged
     # so callers that gate on it (the API, the UI) keep their behaviour.
     ok: bool = False
-    # strict_ok: ok AND no claim-like sentence left without a citation. Stricter
-    # reading of cite-or-refuse for evaluations; an uncited claim does not make an
-    # answer ungrounded, but it is not fully "cited".
+    # strict_ok: ok AND no claim-like sentence left without a citation AND no
+    # negation mismatch. Stricter reading of cite-or-refuse for evaluations; an
+    # uncited claim does not make an answer ungrounded, but it is not fully
+    # "cited".
     strict_ok: bool = False
+    # Figures the answer states that appear in none of its cited sources. A
+    # number with a valid citation beside it used to pass as grounded; "999
+    # hours" cited against a source saying "24 hours" scored 0.83. A figure the
+    # sources do not carry is a fabricated figure, so this makes the answer not
+    # ok - the one thing a lexical check can say with confidence.
+    unsupported_numbers: list[str] = field(default_factory=list)
+    # Cited sentences that negate while none of their sources negates anything.
+    # Reported, and gating strict_ok only: it is a heuristic.
+    negation_mismatches: list[str] = field(default_factory=list)
 
 
 def verify_answer(
@@ -166,14 +199,31 @@ def verify_answer(
     else:
         score = 0.0
 
-    ok = not invalid and score >= min_grounding
+    # Figures and negations are checked per sentence against the sources THAT
+    # SENTENCE cites, not the union: a number may well be in some other cited
+    # source and still be attached to the wrong claim.
+    unsupported: list[str] = []
+    negated: list[str] = []
+    for sentence in split_sentences(answer_text):
+        cited_here = [int(n) for n in _CITATION_RE.findall(sentence) if 1 <= int(n) <= len(sources)]
+        if not cited_here:
+            continue
+        source_text = " ".join(sources[i - 1].chunk.text for i in cited_here)
+        missing = sorted(_numbers(sentence) - _numbers(source_text))
+        unsupported.extend(n for n in missing if n not in unsupported)
+        if _NEGATION_RE.search(_CITATION_RE.sub(" ", sentence)) and not _NEGATION_RE.search(source_text):
+            negated.append(sentence)
+
+    ok = not invalid and score >= min_grounding and not unsupported
     return VerificationReport(
         valid_citations=valid,
         invalid_citations=invalid,
         uncited_sentences=uncited,
         grounding_score=score,
         ok=ok,
-        strict_ok=ok and not uncited,
+        strict_ok=ok and not uncited and not negated,
+        unsupported_numbers=unsupported,
+        negation_mismatches=negated,
     )
 
 
@@ -186,6 +236,10 @@ def format_report(report: VerificationReport) -> str:
     ]
     if report.invalid_citations:
         lines.append(f"  invalid citations (no such source): {report.invalid_citations}")
+    if report.unsupported_numbers:
+        lines.append(f"  figures absent from the cited sources: {report.unsupported_numbers}")
+    for s in report.negation_mismatches:
+        lines.append(f"  negation the cited sources do not carry: {s}")
     for s in report.uncited_sentences:
         lines.append(f"  uncited claim: {s}")
     return "\n".join(lines)
