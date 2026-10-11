@@ -238,9 +238,27 @@ see [docs/docker.md](docs/docker.md) for the bundled Ollama. **Render**:
 (`EMBED_PROVIDER=hosted`, the three `HOSTED_EMBED_*` values and `GROQ_API_KEY`
 set in the dashboard) and builds both indexes at start; the image carries the
 corpora for that, and the container listens on `$PORT` when a platform sets
-one. Not exercised by CI: the first deploy is the test. **Streamlit Community
-Cloud** is not a target: `app.py` expects built indexes and that platform has
-no build step to make them.
+one. Not exercised by CI: the first deploy is the test.
+
+**Streamlit Community Cloud**: deploy `app.py` from this repository and put the
+settings in the app's *Secrets* (Streamlit exports them as environment
+variables, which is how `config.py` reads them):
+
+```toml
+EMBED_PROVIDER = "hosted"
+HOSTED_EMBED_BASE_URL = "https://api.mistral.ai/v1"   # any OpenAI-compatible /embeddings endpoint
+HOSTED_EMBED_MODEL = "mistral-embed"
+HOSTED_EMBED_API_KEY = "..."
+GROQ_API_KEY = "..."
+AUTO_INGEST = "ai_act_sections,filings_sections"
+```
+
+`AUTO_INGEST` names the corpora whose index the app builds itself when it is
+missing. That platform has no build step and no persistent disk, so the index
+is rebuilt (one embedding request per batch of chunks) on every cold start and
+the first visitor after one waits for it, behind a spinner. Left empty, as on a
+workstation, a missing index stays a "run ingest" message. Groq serves no
+embeddings endpoint, so the embedder key is a second provider's key.
 
 **Evaluations** — the first two need only local embeddings, the last two make one
 live LLM call per question:
@@ -262,7 +280,7 @@ With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **352 passing**, the whole suite offline (fake embedder,
+`python -m pytest -q` — **361 passing**, the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations

@@ -21,7 +21,7 @@ import config
 from rag import ui_helpers as ui
 from rag.answer import answer_question
 from rag.embed import get_embedder
-from rag.ingest import document_paths, read_document
+from rag.ingest import document_paths, ensure_index, read_document
 from rag.lexical import BM25Index
 from rag.retrieve import retrieve
 from rag.store import VectorStore
@@ -70,6 +70,19 @@ def indexed_corpora() -> list[str]:
         p.name for p in config.DATA_DIR.iterdir()
         if p.is_dir() and config.index_path(p.name).exists()
     )
+
+
+@st.cache_resource
+def build_missing_indexes() -> list[str]:
+    """Build the indexes `config.AUTO_INGEST` names that are missing; once per process.
+
+    This is what lets the UI come up on a platform with no build step
+    (Streamlit Community Cloud): the corpora are in the repository, the index
+    is not, and nothing else runs before the app. Cached so the disk is not
+    re-checked on every click; a failure (embedder unreachable, bad key) is not
+    cached, so the next rerun tries again once the setting is fixed.
+    """
+    return [corpus for corpus in config.AUTO_INGEST if ensure_index(corpus)]
 
 
 @st.cache_resource
@@ -362,6 +375,19 @@ def main() -> None:
     """Render header and sidebar, replay history and handle a new question."""
     st.set_page_config(page_title="Grounded RAG assistant", layout="wide")
     st.markdown(_CSS, unsafe_allow_html=True)
+    if config.AUTO_INGEST:
+        # The first visitor after a cold start waits here while the corpora are
+        # embedded; the spinner says so instead of looking like a hang. Any
+        # failure (no embedder, wrong key, empty corpus folder) is shown as
+        # text: a traceback would expose the endpoint and give no remedy.
+        try:
+            with st.spinner("Building the missing indexes (first start only)…"):
+                build_missing_indexes()
+        except Exception as exc:  # noqa: BLE001 - every failure here needs the same remedy
+            st.title("Grounded RAG assistant")
+            st.error(f"Index build failed: {exc}. Check EMBED_PROVIDER, the HOSTED_EMBED_* "
+                     "settings and AUTO_INGEST.")
+            return
     corpora = indexed_corpora()
     if not corpora:
         st.title("Grounded RAG assistant")
