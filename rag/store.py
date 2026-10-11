@@ -105,12 +105,23 @@ class VectorStore:
         )
 
     @classmethod
+    def exists(cls, index_dir: Path) -> bool:
+        """Whether `save` has written both files of a store into `index_dir`.
+
+        One file alone is a half-written index that `load` rejects, so a
+        caller deciding whether to ingest must test both, through this method,
+        rather than the folder's presence.
+        """
+        index_dir = Path(index_dir)
+        return (index_dir / _VECTORS_FILE).is_file() and (index_dir / _META_FILE).is_file()
+
+    @classmethod
     def load(cls, index_dir: Path) -> "VectorStore":
         """Rebuild a store from a directory written by `save`."""
         index_dir = Path(index_dir)
         vec_path = index_dir / _VECTORS_FILE
         meta_path = index_dir / _META_FILE
-        if not vec_path.is_file() or not meta_path.is_file():
+        if not cls.exists(index_dir):
             raise FileNotFoundError(
                 f"No vector index found in {index_dir} "
                 f"(expected {_VECTORS_FILE} and {_META_FILE}); run ingestion first."

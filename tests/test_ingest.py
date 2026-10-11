@@ -1,11 +1,13 @@
-"""Tests for rag.ingest document discovery, using a temporary corpus folder.
+"""Tests for rag.ingest: document discovery and the build-if-missing entry point.
 
-Only document loading is covered; the embed/store pipeline needs other modules
-and real backends, so it is tested elsewhere.
+Document loading uses a temporary corpus folder; `ensure_index` runs the real
+chunk/embed/store pipeline on it with the fake embedder, so no backend is needed.
 """
 
+import pytest
+
 import config
-from rag.ingest import document_paths, load_documents
+from rag.ingest import document_paths, ensure_index, load_documents
 
 
 def test_load_documents_skips_readme_and_empty(tmp_path, monkeypatch):
@@ -40,3 +42,50 @@ def test_document_paths_keeps_empty_files(tmp_path, monkeypatch):
 
     assert [p.name for p in document_paths("demo")] == ["blank.txt"]
     assert load_documents("demo") == []
+
+
+def _corpus_on_disk(tmp_path, monkeypatch, corpus: str = "demo"):
+    """A one-file corpus under a temporary data/ and index/ pair, fake embedder."""
+    (tmp_path / "data" / corpus).mkdir(parents=True)
+    (tmp_path / "data" / corpus / "a.txt").write_text(
+        "The provider must respond within 24 hours. Deployers keep the logs.", encoding="utf-8"
+    )
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(config, "INDEX_DIR", tmp_path / "index")
+    monkeypatch.setattr(config, "EMBED_PROVIDER", "fake")
+
+
+def test_ensure_index_builds_a_missing_index_once(tmp_path, monkeypatch):
+    """First call builds (True) and leaves a loadable store; the second finds it
+    and does nothing (False), so a reused disk costs no embedding call."""
+    from rag.store import VectorStore
+
+    _corpus_on_disk(tmp_path, monkeypatch)
+
+    assert ensure_index("demo") is True
+    assert VectorStore.exists(config.index_path("demo"))
+    written = (config.index_path("demo") / "store.json").stat().st_mtime_ns
+
+    assert ensure_index("demo") is False
+    assert (config.index_path("demo") / "store.json").stat().st_mtime_ns == written
+
+
+def test_ensure_index_rebuilds_a_half_written_index(tmp_path, monkeypatch):
+    """One index file alone (an interrupted start) is not an index: it is built
+    again rather than handed to `VectorStore.load`, which would refuse it."""
+    _corpus_on_disk(tmp_path, monkeypatch)
+    config.index_path("demo").mkdir(parents=True)
+    (config.index_path("demo") / "store.json").write_text("{}", encoding="utf-8")
+
+    assert ensure_index("demo") is True
+    assert (config.index_path("demo") / "vectors.npy").is_file()
+
+
+def test_ensure_index_fails_loudly_on_an_empty_corpus(tmp_path, monkeypatch):
+    """An empty folder raises instead of writing an index that refuses everything."""
+    _corpus_on_disk(tmp_path, monkeypatch)
+    (tmp_path / "data" / "demo" / "a.txt").unlink()
+
+    with pytest.raises(ValueError, match="No documents"):
+        ensure_index("demo")
+    assert not config.index_path("demo").exists()
