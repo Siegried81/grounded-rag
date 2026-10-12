@@ -144,12 +144,16 @@ def render_header(corpus: str, mode: str) -> None:
         "and **refuses** when nothing relevant is found."
     )
     key_badge = '<span class="warn">no LLM key set</span>' if llm_key_missing() else ""
+    # Shown only when on: a re-ranker changes which passages reach the model.
+    rerank_badge = ("" if config.RERANKER == "none"
+                    else f"<span>re-ranker: {html.escape(config.RERANK_MODEL)}</span>")
     st.markdown(
         '<div class="badges">'
         f"<span>corpus: {html.escape(corpus)}</span>"
         f"<span>retrieval: {html.escape(mode)}</span>"
         f"<span>LLM: {html.escape(config.LLM_PROVIDER)} · {html.escape(llm_model_name())}</span>"
         f"<span>embeddings: {html.escape(config.EMBED_PROVIDER)}</span>"
+        f"{rerank_badge}"
         f"{key_badge}</div>",
         unsafe_allow_html=True,
     )

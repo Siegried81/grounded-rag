@@ -397,3 +397,11 @@ def test_ask_sources_link_bare_urls(setup, client, monkeypatch):
     monkeypatch.setattr(rag.llm, "complete", lambda prompt, system=None: "Logs [S1].")
     body = client.post("/api/ask", json={"corpus": "demo", "question": "logs?"}).json()
     assert '<a href="https://europa.eu/ai"' in body["sources"][0]["excerpt_html"]
+
+
+def test_config_names_the_reranker_only_when_it_is_on(setup, client, monkeypatch):
+    monkeypatch.setattr(config, "RERANKER", "none")
+    assert client.get("/api/config").json()["reranker"] is None
+    monkeypatch.setattr(config, "RERANKER", "cross_encoder")
+    monkeypatch.setattr(config, "RERANK_MODEL", "some/cross-encoder")
+    assert client.get("/api/config").json()["reranker"] == "some/cross-encoder"
