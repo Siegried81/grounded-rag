@@ -124,8 +124,21 @@ separately, and a half-written or hand-edited pair would otherwise return the
 wrong passage for a query with no visible error.
 
 Why not a vector DB: at thousands of chunks, cosine over a NumPy matrix is
-milliseconds, has no dependency, and the index is two inspectable files. A real
-corpus would swap this module for FAISS/pgvector behind the same `search` seam.
+milliseconds, has no dependency, and the index is two inspectable files.
+
+**Optional ANN backend (`rag/ann.py`, `VECTOR_INDEX=faiss`, off by default).** For
+a corpus far larger than the shipped ones, an in-memory FAISS HNSW graph
+(inner product over unit-length copies of the stored vectors, `M = 32`,
+`FAISS_EF_SEARCH = 64`) sits behind the same `store.search`. The graph only
+**proposes** rows: the store scores them with its own cosine expression on its own
+vectors and orders them as the brute-force path does (score, then row), so a
+passage found this way carries the score `SCORE_THRESHOLD` was set against. What
+ANN can change is recall. Measured on the two shipped indexes (stored vectors used
+as queries, `k = CANDIDATE_K = 20`): the FAISS top-20 equalled the brute-force
+top-20, set and order, for **876 of 878** AI Act chunks and **155 of 155** filings
+chunks, with score differences at most 3.6e-7 (float32 rounding). Two misses in
+878 is exactly why it stays off at this scale, where brute force is exact and
+fast. `faiss-cpu` is imported lazily and lives in `requirements-optional.txt`.
 
 ### 4.2 Keyword index (`rag/lexical.py`)
 
@@ -1015,7 +1028,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**339 tests, all passing, all offline.** The whole suite runs with:
+**367 tests passing, 1 skipped without `faiss-cpu`, all offline.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1045,7 +1058,7 @@ What the suites pin down, beyond per-module unit tests:
   `1m2.5s`, `250ms`), all-keys-limited → one capped wait → retry, the cap and the
   0 = disabled switch, no wait on a non-429 failure, cache hit on an identical
   request, cache miss when the model changes, failures never cached.
-- **Answer metrics** (`test_answer_metrics.py`, 71 tests): refusal detection in
+- **Answer metrics** (`test_answer_metrics.py`, 78 tests): refusal detection in
   EN/FR including the partial-answer rule, `None` on empty denominators, numeric
   fact matching across groupings, scales and French decimals, judge-reply parsing.
 - **Red team** (`test_redteam.py`): an out-of-scope case refuses before any LLM
@@ -1062,6 +1075,12 @@ What the suites pin down, beyond per-module unit tests:
   no content leaked.
 - **UI helpers** (`test_ui_helpers.py`): escaping before highlighting, citation
   badges, refusal and error explanations.
+- **ANN backend** (`test_ann.py`): with a stand-in `faiss` module, the default
+  path never imports faiss, the FAISS path returns the brute-force results and
+  scores when the graph finds them, a missed neighbour is missing without moving
+  any other score, ties keep index order, the graph is rebuilt after `add`, and a
+  missing package is a clear error. One test runs real FAISS (recall@10 ≥ 0.95 on
+  3,000 random vectors, exact scores) and is skipped when it is not installed.
 
 The live evaluations (§8.2, §8.3) are the complement: tests prove the code does
 what it says, evaluations measure how well the system behaves with a real model.
@@ -1149,8 +1168,9 @@ what it says, evaluations measure how well the system behaves with a real model.
   the app answering, but a fallback answer comes from a different model.
 - **Heuristic sentence splitter.** Over-splits on abbreviations; acceptable for
   chunk boundaries, not a linguistic tokenizer.
-- **Brute-force dense search.** Fine to ~10⁴–10⁵ chunks; beyond that, swap in an
-  ANN index behind `store.search`.
+- **Brute-force dense search.** Fine to ~10⁴–10⁵ chunks; beyond that, the
+  optional FAISS backend behind `store.search` (§4.1) trades a little recall for
+  speed. pgvector is not implemented.
 - **One-shot generation.** No multi-hop / query decomposition for questions that
   need evidence spread across many passages, and no streaming: the UI waits for
   the full answer.
@@ -1236,7 +1256,7 @@ standard.
    rates move in steps smaller than 5%.
 5. **Answer streaming** in the CLI, Streamlit and the React UI (server-sent
    events from FastAPI), with verification run once the stream completes.
-6. **ANN store** (FAISS/pgvector) behind the existing `search` seam for larger
-   corpora.
+6. ~~**ANN store**~~ — done for FAISS: `VECTOR_INDEX=faiss`, off by default,
+   behind the existing `search` seam (§4.1). pgvector is not implemented.
 7. **Incremental ingest** keyed on file hashes (the embedding cache already makes
    re-embedding free; this would skip unchanged files end to end).
