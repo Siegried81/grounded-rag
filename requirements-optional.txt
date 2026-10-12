@@ -1,0 +1,7 @@
+# Optional extras, never needed by the default install or by the test suite
+# (their tests use stand-ins and never download a model). Install on top of
+# requirements.txt only for the feature you switch on.
+
+# NLI_CHECK=true: NLI entailment per cited sentence (rag/nli.py). Pulls in
+# torch; the model downloads on first use.
+sentence-transformers>=3.0
