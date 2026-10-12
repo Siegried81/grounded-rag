@@ -367,10 +367,14 @@ no extra LLM call. `verify_answer(answer, sources, min_grounding)` returns a
   English, French and Dutch stopwords removed) that also appear in the union of
   the **cited, valid** sources' content words. Citing nothing, or citing only
   invalid sources, therefore yields 0.
-- `ok = no invalid citation AND grounding_score ≥ min_grounding`. The app and the
-  evaluations use `VERIFY_MIN_GROUNDING = 0.30`: the score is a proxy, so the bar
-  is deliberately modest.
-- `strict_ok = ok AND no uncited sentence`. `ok` tolerates an uncited sentence
+- `unsupported_numbers` — figures a cited sentence states that appear in none of
+  the sources that sentence cites (thousand separators and decimal commas
+  normalised); `negation_mismatches` — cited sentences that negate while none of
+  their cited sources negates (see `docs/decisions.md`, 2026-10-10).
+- `ok = no invalid citation AND grounding_score ≥ min_grounding AND no unsupported
+  figure`. The app and the evaluations use `VERIFY_MIN_GROUNDING = 0.30`: the
+  score is a proxy, so the bar is deliberately modest.
+- `strict_ok = ok AND no uncited sentence AND no negation mismatch`. `ok` tolerates an uncited sentence
   because a connective or a summary line is not always a claim; `strict_ok` is
   the stricter reading for a reader who wants every sentence cited. Both are
   reported, neither changes the other.
@@ -389,7 +393,31 @@ required") — `aa-03` in §8.2 is that failure, measured, with `verify_ok: true
 a fine wrong by a factor of more than twenty — and it is language-sensitive (see
 §13). It is a guardrail and a
 signal, not an entailment checker; the answer evaluation adds an optional LLM
-judge (§8.2), and an NLI check is on the roadmap.
+judge (§8.2), and an optional NLI check sits beside it (§7.1).
+
+### 7.1 Optional NLI entailment check (`rag/nli.py`, `NLI_CHECK=true`)
+
+Off by default. When on, every sentence that cites a valid source is passed to a
+3-way NLI cross-encoder (`NLI_MODEL`, default
+`cross-encoder/nli-deberta-v3-xsmall`) as the hypothesis, with **each passage that
+sentence cites** as a premise; the passage with the highest entailment
+probability gives the sentence its label (entailment / neutral / contradiction),
+and the highest contradiction probability over its cited passages is kept too.
+Passages are scored one at a time because each fits the model's input window and
+several concatenated might not; the cost is that a claim needing two passages
+together reads as not entailed — a conservative error. The label order is read
+from the model's own `id2label`, and a model that is not 3-way NLI is refused.
+
+It is **reported, never folded in**: `verification.nli` in the API (`null` when
+off), a line under the grounding score in both UIs, and a summary after the
+verification report in the CLI — share of cited sentences entailed, then the
+ones that are not, contradictions first. `ok`, `strict_ok` and `grounding_score`
+are computed exactly as without it, so no published figure changes meaning. It is
+not an oracle either: the model has its own error rate, measured nowhere in this
+project yet, which is the reason it reports rather than gates. A failure (package
+missing, model not found) is returned as `nli.error` beside a still-usable answer.
+`sentence-transformers` is imported lazily and listed in
+`requirements-optional.txt`; the tests use a fake checker and never load a model.
 
 ---
 
@@ -1149,6 +1177,12 @@ What the suites pin down, beyond per-module unit tests:
   that passed the gate, never changes a score, cannot promote a passage below the
   threshold, drives MMR's relevance, loads its model lazily and once, and a
   missing package is a clear error.
+- **NLI check** (`test_nli.py`, fake checker, no model loaded): each cited
+  sentence is checked against the passages it cites, the best entailing passage
+  wins, invalid citations and refusals check nothing, it is off by default
+  without importing `sentence-transformers`, lexical verification and `ok` are
+  identical with it on, label order is read from the model, and failures are
+  reported rather than raised; the API carries it as `verification.nli`.
 
 The live evaluations (§8.2, §8.3) are the complement: tests prove the code does
 what it says, evaluations measure how well the system behaves with a real model.
@@ -1160,7 +1194,8 @@ what it says, evaluations measure how well the system behaves with a real model.
 - **Lexical grounding only.** The grounding score counts shared words, not
   meaning. A negation flip or a wrong number in a sentence that reuses the
   source's vocabulary scores well. The optional LLM judge is a stronger, costlier
-  signal; there is no NLI check yet.
+  signal, and the optional NLI check (§7.1) reports entailment per cited
+  sentence beside the score; neither has been run on the evaluation sets yet.
 - **Grounding scores are not comparable across languages.** `verify` tokenises
   Unicode words and drops English, French and Dutch stopwords, so accented words
   stay whole and French function words no longer count as content, but the
@@ -1175,7 +1210,7 @@ what it says, evaluations measure how well the system behaves with a real model.
   `verify_ok: true`, citation validity 1.000, and an answer wrong by a factor of
   more than twenty. Nothing downstream of the model can catch that class of error
   with lexical signals alone, which is why the full cited document is one click
-  away in both UIs and why the NLI item is first on the roadmap.
+  away in both UIs and why the optional NLI check (§7.1) was built.
 - **Heuristic refusal detection, measured failing.** Both the answer evaluation and
   the red team recognise model-side refusals by phrase lists. A hedged first
   sentence on an answerable question is scored as a refusal; a refusal worded
@@ -1319,9 +1354,11 @@ standard.
    (§5). Still to do: measure it with `scripts/run_eval.py` against the published
    retrieval tables (the main lever expected on the filings MRR) before deciding
    whether it should become the default.
-3. **Semantic faithfulness**: an NLI entailment check per cited sentence, and/or
-   the existing LLM judge promoted from opt-in to a regular part of the answer
-   evaluation, on top of the lexical proxy.
+3. **Semantic faithfulness**: the NLI entailment check per cited sentence is
+   built (§7.1, `NLI_CHECK=true`, off by default). Still to do: run it on the
+   answer evaluation, measure its agreement with the key-fact and judge verdicts
+   (`aa-03` is the first row to check), and/or promote the LLM judge from opt-in
+   to a regular part of the answer evaluation.
 4. **Larger eval sets**: more answer questions per corpus, more unanswerable
    traps, several companies' 10-Ks, and more red-team cases per category, so
    rates move in steps smaller than 5%.

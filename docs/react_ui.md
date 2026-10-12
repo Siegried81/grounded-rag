@@ -92,9 +92,12 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
   `excerpt_html` is HTML-escaped server-side and only adds `<mark>` tags and
   `<a>` links on bare `http(s)` URLs (`target="_blank" rel="noopener noreferrer"`).
 - `verification`: `{ok, grounding_score, min_grounding, valid_citations,
-  invalid_citations, uncited_sentences, explanation}`. Verification runs outside
-  the LLM error handling: a failure there is a bug to surface, not a provider
-  outage.
+  invalid_citations, uncited_sentences, explanation, nli}`. Verification runs
+  outside the LLM error handling: a failure there is a bug to surface, not a
+  provider outage. `nli` is `null` unless `NLI_CHECK=true`; then it is `{model,
+  error, entailed_fraction, checked, contradicted[], sentences[]}` with, per cited
+  sentence, `{sentence, cited, label, entailment, contradiction, best_source}`. It
+  is reported beside `ok` and never changes it.
 - `latency`: `{retrieval_s, answer_s}`.
 - `error`: `null`, or `{kind: "embedding" | "llm" | "index", message, hint}`.
   `index` means the corpus was indexed with another embedding model than the
@@ -138,7 +141,9 @@ passages. `GET /api/config` reports `stream_answers` (`STREAM_ANSWERS`, default
   behind an "Open ... in full" panel under each source.
 - Bare `http(s)` URLs in a passage or a document are clickable. Only those two
   schemes are linked, so a passage cannot hand the reader a `javascript:` target.
-- A verification badge with its explanation, invalid citations and uncited claims.
+- A verification badge with its explanation, invalid citations and uncited claims,
+  and, when the NLI check is on, the share of cited sentences entailed by their
+  passage with the ones that are not (the badge stays the lexical verdict).
 - A refusal panel with the best score against the threshold and the closest passages.
 - While the answer is being written: the passages, then the text so far with a
   caret, as plain text (citation chips, sources' "cited" accents and the
