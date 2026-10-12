@@ -170,11 +170,29 @@ export default function Turn({ turn }) {
       <div className="msg assistant" id={`turn-${turn.id}-assistant`}>
         <div className="avatar" aria-hidden="true">S</div>
         <div className="assistant-body">
-          {turn.status === "loading" && (
+          {turn.status === "loading" && !turn.partial && (
             <div className="loading" role="status">
               <span className="dots" aria-hidden="true"><i /><i /><i /></span>
               {t("thinking")}
             </div>
+          )}
+
+          {/* While streaming: the raw text so far, without citation chips (a
+              marker can be split across deltas), and the passages it draws on.
+              Both are replaced by the verified result when the stream ends. */}
+          {turn.status === "loading" && turn.partial && (
+            <div className="answer streaming" aria-busy="true">
+              <Markdown text={turn.partial} />
+            </div>
+          )}
+          {turn.status === "loading" && turn.streamSources && (
+            <Sources
+              title={t("sources")}
+              sources={turn.streamSources}
+              turnId={turn.id}
+              flashSid={flashSid}
+              onOpenDocument={setOpenSource}
+            />
           )}
 
           {turn.status === "failed" && (
