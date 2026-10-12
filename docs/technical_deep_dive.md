@@ -185,8 +185,10 @@ query
         ranked = fused mapped back to Retrieved
     else:
         ranked = dense_pass
+  → if RERANKER: ranked = sort by cross_encoder(q, passage)  # optional, off by default
   → if USE_MMR: ranked = MMR(relevance, ranked vectors, MMR_LAMBDA)   # diversify
-        # relevance = min-max RRF score if fused, else dense cosine
+        # relevance = min-max cross-encoder score if re-ranked,
+        #             else min-max RRF score if fused, else dense cosine
   → return ranked[:TOP_K]
 ```
 
@@ -207,10 +209,25 @@ cosine score remains the single, stable gate.
   leave BM25 with no effect on the final ranking, and raw RRF values are too
   bunched (~0.012–0.033) to weigh against the cosine redundancy term. It is
   skipped gracefully if the store cannot supply vectors (e.g. a test fake).
+- **Cross-encoder re-ranker (`rag/rerank.py`, `RERANKER=cross_encoder`, off by
+  default).** A cross-encoder reads the question and a passage together and
+  scores the pair, which orders a short list more sharply than comparing two
+  separately computed embeddings. It re-orders the pool that passed the gate
+  (dense, or fused in hybrid mode) before MMR and the `TOP_K` cut, and its scores,
+  min-max rescaled, become MMR's relevance term. It never changes a passage's
+  `score` and runs after the gate, so a refusal means exactly what it did; what it
+  changes is which admitted passages reach the model, which is why it is off and
+  why no published number uses it. Model: `RERANK_MODEL`
+  (`cross-encoder/ms-marco-MiniLM-L-6-v2`), loaded once per process on first use;
+  `sentence-transformers` is imported lazily and listed in
+  `requirements-optional.txt`. `scripts/run_eval.py` names the model on its
+  summary line when it is on, so a re-ranked run cannot pass for a default one;
+  `/api/config` reports it as `reranker` and both UIs show it as a badge.
 
 Knobs (all in `config.py`, defaults in brackets): `RETRIEVAL_MODE` (`hybrid`),
 `CANDIDATE_K` (20), `TOP_K` (5), `SCORE_THRESHOLD` (0.35), `USE_MMR` (true),
-`MMR_LAMBDA` (0.6). `config.py` raises at import when `RETRIEVAL_MODE` is neither
+`MMR_LAMBDA` (0.6), `RERANKER` (`none`). `config.py` raises at import when
+`RERANKER` is neither `none` nor `cross_encoder`, or when `RETRIEVAL_MODE` is neither
 `hybrid` nor `dense`: `retrieve` treats anything else as hybrid, so a typo would
 run hybrid while the UIs display the typo.
 
@@ -1127,6 +1144,11 @@ What the suites pin down, beyond per-module unit tests:
   any other score, ties keep index order, the graph is rebuilt after `add`, and a
   missing package is a clear error. One test runs real FAISS (recall@10 ≥ 0.95 on
   3,000 random vectors, exact scores) and is skipped when it is not installed.
+- **Re-ranker** (`test_rerank.py`, fake cross-encoder, no model loaded): off by
+  default without importing `sentence-transformers`, it re-orders only the pool
+  that passed the gate, never changes a score, cannot promote a passage below the
+  threshold, drives MMR's relevance, loads its model lazily and once, and a
+  missing package is a clear error.
 
 The live evaluations (§8.2, §8.3) are the complement: tests prove the code does
 what it says, evaluations measure how well the system behaves with a real model.
@@ -1293,8 +1315,10 @@ standard.
    right place for them); widening `_STRONG_REFUSAL_RE` so a real refusal like
    `jb-01`'s is not scored as a failure; and re-running the answer evaluation once
    so the key-fact figures are measured rather than projected (§8.2).
-2. **Cross-encoder re-ranker** over the fused candidate pool before `TOP_K`, for a
-   sharper final ordering than MMR alone — the main lever on the filings MRR.
+2. ~~**Cross-encoder re-ranker**~~ — built, off by default: `RERANKER=cross_encoder`
+   (§5). Still to do: measure it with `scripts/run_eval.py` against the published
+   retrieval tables (the main lever expected on the filings MRR) before deciding
+   whether it should become the default.
 3. **Semantic faithfulness**: an NLI entailment check per cited sentence, and/or
    the existing LLM judge promoted from opt-in to a regular part of the answer
    evaluation, on top of the lexical proxy.

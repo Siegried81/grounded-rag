@@ -19,6 +19,9 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
 - **Hybrid retrieval**: BM25 keywords + dense embeddings, merged with Reciprocal
   Rank Fusion, then diversified with MMR. The refusal gate stays on the dense
   cosine score, so hybrid mode never lowers the bar for answering.
+- **Optional cross-encoder re-ranker** (`RERANKER=cross_encoder`, off by
+  default): re-orders the passages that passed the gate before `TOP_K`, never
+  their scores; not used for any number below.
 - **Refusal gate** before the LLM is ever called, plus refusal detection in the
   answer. Measured honestly: the gate has never fired in 61 live questions, so
   what has actually refused so far is the model — see [Limitations](#limitations).
