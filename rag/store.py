@@ -91,6 +91,14 @@ class VectorStore:
             if cid in index
         }
 
+    def rows(self) -> list[tuple[Chunk, np.ndarray]]:
+        """Every stored (chunk, vector) pair, in index order.
+
+        Lets an incremental ingest carry an unchanged file's chunks and vectors
+        into the next build without re-embedding them.
+        """
+        return list(zip(self._chunks, self._vectors))
+
     def save(self) -> None:
         """Write vectors and chunk metadata to `index_dir`.
 
