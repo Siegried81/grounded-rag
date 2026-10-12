@@ -64,6 +64,7 @@ export default function Header({ config, corpus, mode, answerLang, onAnswerLang,
           <li>{t("badgeRetrieval", { value: mode })}</li>
           <li>{t("badgeLlm", { provider: config.llm_provider, model: config.llm_model })}</li>
           <li>{t("badgeEmbeddings", { value: config.embed_provider })}</li>
+          {config.reranker && <li>{t("badgeReranker", { value: config.reranker })}</li>}
           <li>{t("badgeRefusal", { value: config.refusal_threshold.toFixed(2) })}</li>
           {!config.llm_key_configured && <li className="warn">{t("badgeNoKey")}</li>}
         </ul>

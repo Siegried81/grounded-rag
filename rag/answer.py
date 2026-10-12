@@ -8,6 +8,7 @@ safest way to avoid an ungrounded answer is to never give the model the chance.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
 
 import rag.llm
@@ -158,3 +159,26 @@ def answer_question(
         return Answer(REFUSAL_MESSAGES.get(language, REFUSAL_MESSAGE), [], True)
     text = rag.llm.complete(_build_prompt(question, retrieved), system=system_prompt(language))
     return Answer(text=normalize_citations(text), sources=retrieved, refused=False)
+
+
+def stream_answer(
+    question: str, retrieved: list[Retrieved], language: str | None = None
+) -> Iterator[tuple[str, object]]:
+    """Answer like `answer_question`, yielding ("delta", text) events, then ("answer", Answer).
+
+    The deltas are the model's raw text as it arrives, for display only. The
+    final Answer is built from the whole text with `normalize_citations`, exactly
+    as `answer_question` builds it, because a marker such as "【S1】" can be cut
+    across two deltas: citations are normalised, and the answer verified, once
+    the stream is complete, never piece by piece. A refusal yields the Answer
+    alone, with no LLM call.
+    """
+    language = _normalize_language(language)
+    if not retrieved:
+        yield "answer", Answer(REFUSAL_MESSAGES.get(language, REFUSAL_MESSAGE), [], True)
+        return
+    parts: list[str] = []
+    for delta in rag.llm.stream(_build_prompt(question, retrieved), system=system_prompt(language)):
+        parts.append(delta)
+        yield "delta", delta
+    yield "answer", Answer(text=normalize_citations("".join(parts)), sources=retrieved, refused=False)

@@ -10,6 +10,10 @@ waits for the window Groq announces (``config.GROQ_MAX_WAIT_S``) and retries
 once before falling back; and successful completions are cached on disk by an
 exact hash of the request (``config.LLM_CACHE``), so a repeated question or a
 re-run evaluation costs no quota.
+
+`stream` is the same request delivered token by token, for the UIs: same
+payload apart from the provider's stream flag, same fallback order, same cache
+entry. It only changes when the reader sees the text, never what the text is.
 """
 
 from __future__ import annotations
@@ -19,6 +23,7 @@ import json
 import re
 import threading
 import time
+from collections.abc import Iterator
 
 import requests
 
@@ -66,6 +71,41 @@ def _openai_style(url: str, key: str, model: str, prompt: str, system: str | Non
     return resp.json()["choices"][0]["message"]["content"]
 
 
+def _openai_style_stream(url: str, key: str, model: str, prompt: str,
+                         system: str | None) -> Iterator[str]:
+    """Open a streamed OpenAI-compatible completion and return an iterator of text deltas.
+
+    The request is sent and its status checked HERE, before the iterator is
+    returned, so a 429 or a bad key raises at the same point as in
+    `_openai_style` and key rotation and provider fallback still apply. The
+    body is server-sent events: one `data: {json}` line per delta, ending with
+    `data: [DONE]`.
+    """
+    resp = requests.post(
+        url,
+        headers={"Authorization": f"Bearer {key}"},
+        json={"model": model, "messages": _messages(prompt, system), "temperature": 0,
+              "stream": True},
+        timeout=TIMEOUT_S,
+        stream=True,
+    )
+    resp.raise_for_status()
+
+    def deltas() -> Iterator[str]:
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            data = line[len("data:"):].strip()
+            if data == "[DONE]":
+                return
+            choices = json.loads(data).get("choices") or [{}]
+            text = (choices[0].get("delta") or {}).get("content")
+            if text:
+                yield text
+
+    return deltas()
+
+
 _DURATION_PART = re.compile(r"(\d+(?:\.\d+)?)(ms|h|m|s)")
 
 
@@ -98,8 +138,12 @@ def _rate_limit_wait(exc: Exception) -> float | None:
     return min(waits) if waits else None
 
 
-def _groq(prompt: str, system: str | None) -> str:
+def _groq(prompt: str, system: str | None, call=_openai_style):
     """Call Groq, rotating through the configured keys until one succeeds.
+
+    `call` is `_openai_style` for a whole reply or `_openai_style_stream` for a
+    streamed one; both raise on a bad status before returning, so rotation and
+    the rate-limit wait below are shared by the two.
 
     The free tier is rate-limited per key, so when a key fails (typically a 429)
     we try the next one. When every key was rate-limited and Groq announced when
@@ -113,7 +157,7 @@ def _groq(prompt: str, system: str | None) -> str:
         waits: list[float] = []
         for key in config.GROQ_API_KEYS:
             try:
-                return _openai_style(
+                return call(
                     "https://api.groq.com/openai/v1/chat/completions",
                     key, config.GROQ_MODEL, prompt, system,
                 )
@@ -129,9 +173,9 @@ def _groq(prompt: str, system: str | None) -> str:
     raise last_exc if last_exc else RuntimeError("no Groq API keys configured")
 
 
-def _openrouter(prompt: str, system: str | None) -> str:
-    """Call OpenRouter and return the reply text."""
-    return _openai_style(
+def _openrouter(prompt: str, system: str | None, call=_openai_style):
+    """Call OpenRouter and return the reply text (or, with `call` streaming, its deltas)."""
+    return call(
         "https://openrouter.ai/api/v1/chat/completions",
         config.OPENROUTER_API_KEY, config.OPENROUTER_MODEL, prompt, system,
     )
@@ -150,6 +194,40 @@ def _ollama(prompt: str, system: str | None) -> str:
     )
     resp.raise_for_status()
     return resp.json()["message"]["content"]
+
+
+def _ollama_stream(prompt: str, system: str | None) -> Iterator[str]:
+    """Open a streamed Ollama chat and return an iterator of text deltas.
+
+    Ollama streams newline-delimited JSON objects, each carrying a piece of
+    `message.content`, the last one with `done: true`. As in
+    `_openai_style_stream`, the status is checked before the iterator is
+    returned, so a daemon that is down fails over like the non-streamed call.
+    """
+    resp = requests.post(
+        f"{config.OLLAMA_URL}/api/chat",
+        json={
+            "model": config.OLLAMA_LLM_MODEL,
+            "messages": _messages(prompt, system),
+            "stream": True,
+        },
+        timeout=TIMEOUT_S,
+        stream=True,
+    )
+    resp.raise_for_status()
+
+    def deltas() -> Iterator[str]:
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line:
+                continue
+            event = json.loads(line)
+            text = (event.get("message") or {}).get("content")
+            if text:
+                yield text
+            if event.get("done"):
+                return
+
+    return deltas()
 
 
 def _provider_table() -> dict:
@@ -200,6 +278,65 @@ def complete(prompt: str, *, system: str | None = None, order: list[str] | None 
         _cache_put(cache_path, text, name)
         _last.provider = name
         return text
+    raise LLMError("All LLM providers failed: " + "; ".join(reasons or ["none configured"]))
+
+
+def _stream_table() -> dict:
+    """Map provider name -> function opening a streamed reply; same keys as `_provider_table`."""
+    return {
+        "groq": lambda p, s: _groq(p, s, call=_openai_style_stream),
+        "openrouter": lambda p, s: _openrouter(p, s, call=_openai_style_stream),
+        "ollama": _ollama_stream,
+    }
+
+
+def stream(prompt: str, *, system: str | None = None,
+           order: list[str] | None = None) -> Iterator[str]:
+    """Yield the completion of `complete(prompt, ...)` as text deltas, as they arrive.
+
+    Same request, provider order, key skipping and cache as `complete`: a cached
+    reply is yielded whole, and a streamed reply is cached under the same key,
+    so streaming and non-streaming answers to one question are interchangeable.
+
+    Fallback only happens while nothing has been yielded: once a provider has
+    sent text, the reader has seen it, so a failure after that point raises
+    LLMError instead of silently continuing with another model's answer. An
+    empty reply falls through to the next provider, as in `complete`.
+    """
+    names = list(dict.fromkeys(order if order is not None else config.LLM_FALLBACK_ORDER))
+    cache_path = _cache_path(names, prompt, system)
+    cached = _cache_get(cache_path)
+    if cached is not None:
+        _last.provider = cached[1]
+        yield cached[0]
+        return
+    keys = {name: key for name, (_, key) in _provider_table().items()}
+    openers = _stream_table()
+    reasons: list[str] = []
+    for name in names:
+        if name not in openers:
+            reasons.append(f"{name}: unknown provider")
+            continue
+        if not keys[name]:
+            reasons.append(f"{name}: no API key")
+            continue
+        parts: list[str] = []
+        try:
+            for delta in openers[name](prompt, system):
+                parts.append(delta)
+                yield delta
+        except Exception as exc:  # before any text: next provider; after: give up
+            if any(p.strip() for p in parts):
+                raise LLMError(f"{name}: stream interrupted: {exc}") from exc
+            reasons.append(f"{name}: {exc}")
+            continue
+        text = "".join(parts)
+        if not text.strip():
+            reasons.append(f"{name}: empty reply")
+            continue
+        _cache_put(cache_path, text, name)
+        _last.provider = name
+        return
     raise LLMError("All LLM providers failed: " + "; ".join(reasons or ["none configured"]))
 
 

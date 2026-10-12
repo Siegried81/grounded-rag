@@ -19,6 +19,9 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
 - **Hybrid retrieval**: BM25 keywords + dense embeddings, merged with Reciprocal
   Rank Fusion, then diversified with MMR. The refusal gate stays on the dense
   cosine score, so hybrid mode never lowers the bar for answering.
+- **Optional cross-encoder re-ranker** (`RERANKER=cross_encoder`, off by
+  default): re-orders the passages that passed the gate before `TOP_K`, never
+  their scores; not used for any number below.
 - **Refusal gate** before the LLM is ever called, plus refusal detection in the
   answer. Measured honestly: the gate has never fired in 61 live questions, so
   what has actually refused so far is the model — see [Limitations](#limitations).
@@ -43,6 +46,11 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
   on-disk LLM response cache.
 - **Two UIs** (React + FastAPI on port 8002, or Streamlit), **Docker**, and one
   structured LLM call per question — no agent loop.
+- **Answer streaming**: both UIs show the answer while the model writes it
+  (server-sent events from `POST /api/ask/stream`; `cli.py ask --stream`).
+  Citations are normalised and the answer verified once the stream is complete,
+  so a streamed answer is the same answer, with the same checks, as a whole one.
+  `STREAM_ANSWERS=false` turns it off in the UIs.
 - **Language choice**: interface in English or French, answers in English by
   default (or auto / French / Dutch) whatever the language of the sources.
 
@@ -207,6 +215,7 @@ ollama pull llama3.2:3b               # only needed for the Ollama generation fa
 python cli.py ingest --corpus ai_act_sections
 python cli.py ingest --incremental --corpus ai_act_sections  # later: only new/changed files
 python cli.py ask --corpus ai_act_sections "What are the obligations for high-risk AI systems?"
+python cli.py ask --stream --corpus ai_act_sections "Which AI practices are prohibited?"  # print as generated
 ```
 
 `config.py` refuses to import with an invalid `RETRIEVAL_MODE`, and a corpus
@@ -281,7 +290,7 @@ With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **371 passing**, the whole suite offline (fake embedder,
+`python -m pytest -q` — **415 passing** (plus 1 skipped without `faiss-cpu`; 416 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations
@@ -306,7 +315,10 @@ all HTTP mocked). The count printed at the end is the current one.
 - **Verification proves traceability, not truth** — `aa-03` above is a wrong answer
   with `verify_ok: true` and a valid citation.
 - **Grounding is lexical** (word overlap, not entailment); refusal detection is a
-  phrase heuristic that misses real refusals (`jb-01`).
+  phrase heuristic that misses real refusals (`jb-01`). An optional NLI check per
+  cited sentence (`NLI_CHECK=true`, off by default, `requirements-optional.txt`)
+  is reported beside the grounding score without changing it; it has not been run
+  on the evaluation sets, so no number here comes from it.
 - **The system prompt is extractable**: `leak-02` reproduced it verbatim.
 - **Small eval sets**: 23–25 retrieval / 40 answer / 21 red-team questions, written
   by one person (me) against the corpora — so they test the pipeline, not the
@@ -324,6 +336,9 @@ all HTTP mocked). The count printed at the end is the current one.
   and red-team tables are each a single run, so they carry no run-to-run variance,
   only the sampling interval. Numbers will move with the model.
 - **Brute-force NumPy search, one-shot generation**: fine at this scale, no multi-hop.
+  An optional FAISS HNSW backend (`VECTOR_INDEX=faiss`, `requirements-optional.txt`)
+  sits behind the same `search` for much larger corpora; it is off by default and
+  no published number uses it.
 
 Details and roadmap: [technical deep dive](docs/technical_deep_dive.md).
 

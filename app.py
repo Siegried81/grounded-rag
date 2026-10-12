@@ -19,10 +19,11 @@ import streamlit as st
 
 import config
 from rag import ui_helpers as ui
-from rag.answer import answer_question
+from rag.answer import answer_question, stream_answer
 from rag.embed import get_embedder
 from rag.ingest import document_paths, ensure_index, read_document
 from rag.lexical import BM25Index
+from rag.nli import nli_summary
 from rag.retrieve import retrieve
 from rag.store import VectorStore
 from rag.verify import extract_citations, verify_answer
@@ -144,12 +145,16 @@ def render_header(corpus: str, mode: str) -> None:
         "and **refuses** when nothing relevant is found."
     )
     key_badge = '<span class="warn">no LLM key set</span>' if llm_key_missing() else ""
+    # Shown only when on: a re-ranker changes which passages reach the model.
+    rerank_badge = ("" if config.RERANKER == "none"
+                    else f"<span>re-ranker: {html.escape(config.RERANK_MODEL)}</span>")
     st.markdown(
         '<div class="badges">'
         f"<span>corpus: {html.escape(corpus)}</span>"
         f"<span>retrieval: {html.escape(mode)}</span>"
         f"<span>LLM: {html.escape(config.LLM_PROVIDER)} · {html.escape(llm_model_name())}</span>"
         f"<span>embeddings: {html.escape(config.EMBED_PROVIDER)}</span>"
+        f"{rerank_badge}"
         f"{key_badge}</div>",
         unsafe_allow_html=True,
     )
@@ -262,6 +267,30 @@ def render_sources(sources, question: str, cited: list[int], title: str) -> None
     )
 
 
+def render_nli(nli: dict | None) -> None:
+    """The optional NLI check, under the grounding line it complements (never replaces).
+
+    Says what share of cited sentences the model reads as entailed by their
+    cited passage, and lists the ones it does not, contradictions first.
+    """
+    if not nli:
+        return
+    if nli["error"]:
+        st.caption(f"NLI check unavailable: {nli['error']}")
+        return
+    if nli["entailed_fraction"] is None:
+        st.caption("NLI check: no cited sentence to check.")
+        return
+    st.markdown(
+        f"NLI entailment **{nli['entailed_fraction']:.2f}** "
+        f"({nli['checked']} cited sentences, `{nli['model']}`)"
+    )
+    flagged = sorted((s for s in nli["sentences"] if s["label"] != "entailment"),
+                     key=lambda s: s["label"] != "contradiction")
+    if flagged:
+        st.markdown("\n".join(f"- *{s['label']}*: {s['sentence']}" for s in flagged))
+
+
 def render_assistant(msg: dict) -> None:
     """Render one assistant turn: answer or refusal, verification, sources, timings."""
     if msg.get("embed_error"):
@@ -284,6 +313,7 @@ def render_assistant(msg: dict) -> None:
             badge = ":green-badge[verified]" if rep.ok else ":orange-badge[issues found]"
             st.markdown(f"{badge} grounding **{rep.grounding_score:.2f}**")
             st.caption(ui.explain_grounding(rep.grounding_score, config.VERIFY_MIN_GROUNDING, rep.ok))
+            render_nli(msg.get("nli"))
             if rep.invalid_citations:
                 st.markdown(
                     "Invalid citations (no such source): "
@@ -300,13 +330,18 @@ def render_assistant(msg: dict) -> None:
     st.caption(timing)
 
 
-def run_question(question: str, store, bm25, embedder, settings: dict) -> dict:
+def run_question(question: str, store, bm25, embedder, settings: dict, on_delta=None) -> dict:
     """Retrieve, answer and verify one question; turn failures into messages.
 
     Retrieval and generation are timed separately because they fail and slow down
     for different reasons (embedding backend vs LLM provider). On refusal the
     closest passages are fetched with a plain dense search so the user sees what
     was found and how far below the threshold it was.
+
+    With `on_delta`, the answer is streamed: each piece of raw model text is
+    passed to it as it arrives, for display. The returned message is the same as
+    without it, because the answer kept and verified is the complete text,
+    normalised once the stream has ended (see answer.stream_answer).
     """
     msg = {"role": "assistant", "question": question, "refused": False, "text": "",
            "sources": [], "closest": [], "report": None, "t_answer": None}
@@ -335,7 +370,14 @@ def run_question(question: str, store, bm25, embedder, settings: dict) -> dict:
     msg["sources"] = retrieved
     t1 = time.perf_counter()
     try:
-        answer = answer_question(question, retrieved, language=settings["language"])
+        if on_delta is None:
+            answer = answer_question(question, retrieved, language=settings["language"])
+        else:
+            for kind, value in stream_answer(question, retrieved, language=settings["language"]):
+                if kind == "delta":
+                    on_delta(value)
+                else:
+                    answer = value
     except Exception as exc:  # LLMError or any provider failure: still show the passages
         msg["llm_error"] = ui.llm_error_hint(str(exc), config.LLM_PROVIDER)
         msg["t_answer"] = time.perf_counter() - t1
@@ -345,6 +387,7 @@ def run_question(question: str, store, bm25, embedder, settings: dict) -> dict:
     # Outside the try: verification is offline code, so a failure here is a bug
     # to surface, not a provider outage to explain with an API-key hint.
     msg["report"] = verify_answer(answer.text, retrieved, min_grounding=config.VERIFY_MIN_GROUNDING)
+    msg["nli"] = nli_summary(answer.text, retrieved)  # None unless NLI_CHECK is on
     return msg
 
 
@@ -414,8 +457,19 @@ def main() -> None:
         with st.chat_message("user"):
             st.markdown(question)
         with st.chat_message("assistant"):
+            # Streamed text is shown as plain Markdown, without the citation
+            # badges: a marker can be split across pieces, so badges, sources
+            # and the verification report are rendered once the answer is whole.
+            live, parts = st.empty(), []
+
+            def show(delta: str) -> None:
+                parts.append(delta)
+                live.markdown("".join(parts) + " ▌")
+
             with st.spinner("Retrieving passages and drafting a cited answer..."):
-                msg = run_question(question, store, bm25, embedder, settings)
+                msg = run_question(question, store, bm25, embedder, settings,
+                                   on_delta=show if config.STREAM_ANSWERS else None)
+            live.empty()
             history.append(msg)
             render_assistant(msg)
 

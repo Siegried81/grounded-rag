@@ -54,6 +54,26 @@ CANDIDATE_K = int(os.getenv("CANDIDATE_K", "20"))
 # passages; lambda 1.0 is pure relevance, 0.0 pure diversity.
 USE_MMR = os.getenv("USE_MMR", "true").lower() == "true"
 MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.6"))
+# Dense search backend. "numpy" (default) is the exact brute-force product every
+# published number was measured with. "faiss" proposes candidates from an
+# approximate HNSW graph (rag/ann.py) for corpora far larger than the shipped
+# ones; scores are still exact cosines, but a passage the graph misses is
+# missing, so recall can drop. Needs `faiss-cpu` (requirements-optional.txt).
+VECTOR_INDEX = os.getenv("VECTOR_INDEX", "numpy").strip().lower()
+if VECTOR_INDEX not in ("numpy", "faiss"):
+    raise ValueError(f"VECTOR_INDEX must be 'numpy' or 'faiss', got {VECTOR_INDEX!r}")
+# HNSW search beam: higher is slower and closer to exact.
+FAISS_EF_SEARCH = int(os.getenv("FAISS_EF_SEARCH", "64"))
+# Optional cross-encoder re-ranker over the candidate pool that passed the gate,
+# before MMR and TOP_K (rag/rerank.py). "none" (default) is the pipeline every
+# published number was measured with; "cross_encoder" re-orders passages, so it
+# changes which ones reach the model, but never a score or the refusal gate.
+# Needs `sentence-transformers` (requirements-optional.txt) and downloads
+# RERANK_MODEL on first use.
+RERANKER = os.getenv("RERANKER", "none").strip().lower()
+if RERANKER not in ("none", "cross_encoder"):
+    raise ValueError(f"RERANKER must be 'none' or 'cross_encoder', got {RERANKER!r}")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 # --- Chunking / ingestion ----------------------------------------------------
 # "smart" packs whole sentences (better passages & citations); "char" is the
@@ -73,6 +93,13 @@ INCREMENTAL_INGEST = os.getenv("INCREMENTAL_INGEST", "false").lower() == "true"
 # check. It is a proxy, not entailment, so the bar is deliberately modest.
 VERIFY_MIN_GROUNDING = float(os.getenv("VERIFY_MIN_GROUNDING", "0.30"))
 QUERY_LOG_PATH = ROOT / "logs" / "queries.jsonl"
+# Optional NLI entailment check per cited sentence (rag/nli.py), reported next
+# to the lexical grounding score and never folded into it: `ok`, `strict_ok`
+# and `grounding_score` mean the same with it on or off. Off by default; needs
+# `sentence-transformers` (requirements-optional.txt) and downloads NLI_MODEL
+# (a 3-way contradiction/entailment/neutral cross-encoder) on first use.
+NLI_CHECK = os.getenv("NLI_CHECK", "false").lower() == "true"
+NLI_MODEL = os.getenv("NLI_MODEL", "cross-encoder/nli-deberta-v3-xsmall")
 
 # --- Answer language ---------------------------------------------------------
 # Language the UIs ask answers to be written in. "auto" adds nothing to the
@@ -86,6 +113,16 @@ if DEFAULT_ANSWER_LANGUAGE not in SUPPORTED_ANSWER_LANGUAGES:
     DEFAULT_ANSWER_LANGUAGE = "en"
 # Languages the interface texts (examples, explanations, limitations) exist in.
 SUPPORTED_UI_LANGUAGES = ("en", "fr")
+
+# --- Answer streaming --------------------------------------------------------
+# Whether the Streamlit and React UIs show the answer while the model writes it
+# (server-sent events from POST /api/ask/stream). It changes when the text
+# appears, not what it says: the request, the LLM cache entry, citation
+# normalisation and verification are the same as without streaming, and
+# verification runs once the stream is complete. "false" restores the
+# wait-for-the-whole-answer behaviour, e.g. behind a proxy that buffers events.
+# The CLI streams only with `ask --stream`, so its default output is unchanged.
+STREAM_ANSWERS = os.getenv("STREAM_ANSWERS", "true").lower() == "true"
 
 # --- Embedding backend -------------------------------------------------------
 EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "ollama")

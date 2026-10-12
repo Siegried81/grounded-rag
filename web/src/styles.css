@@ -233,6 +233,13 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .answer p { margin: 0.4em 0; }
 .answer ul, .answer ol { margin: 0.4em 0; padding-left: 22px; }
 .md-heading { font-weight: 700; }
+/* An answer still being written: a caret after the last paragraph. The reduced-
+   motion rule below stops it blinking. */
+.answer.streaming p:last-child::after {
+  content: ""; display: inline-block; width: 0.5em; height: 1em; margin-left: 2px;
+  vertical-align: text-bottom; background: var(--accent); animation: caret 1s steps(1) infinite;
+}
+@keyframes caret { 50% { opacity: 0; } }
 
 .cite, .cite-bad {
   display: inline-block; padding: 0 6px; margin: 0 2px; border-radius: 6px;
