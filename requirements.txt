@@ -14,3 +14,6 @@ httpx>=0.27
 # because it pulls in torch (~2.5 GB) and nothing else here needs it - the
 # import is lazy and the suite runs without it.
 # sentence-transformers>=3.0
+#
+# Other optional extras (FAISS for VECTOR_INDEX=faiss) are listed in
+# requirements-optional.txt.

@@ -287,7 +287,7 @@ With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **378 passing**, the whole suite offline (fake embedder,
+`python -m pytest -q` — **367 passing** (plus 1 skipped without `faiss-cpu`), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations
@@ -330,6 +330,9 @@ all HTTP mocked). The count printed at the end is the current one.
   and red-team tables are each a single run, so they carry no run-to-run variance,
   only the sampling interval. Numbers will move with the model.
 - **Brute-force NumPy search, one-shot generation**: fine at this scale, no multi-hop.
+  An optional FAISS HNSW backend (`VECTOR_INDEX=faiss`, `requirements-optional.txt`)
+  sits behind the same `search` for much larger corpora; it is off by default and
+  no published number uses it.
 
 Details and roadmap: [technical deep dive](docs/technical_deep_dive.md).
 

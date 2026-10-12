@@ -70,5 +70,7 @@ opens the whole cited document, not just the excerpt.
 A corpus here is hundreds to a few thousand chunks; brute-force cosine is a few
 milliseconds and needs no server, deploys with the repo, and is trivially
 inspectable and testable. The `VectorStore` interface (`add`, `search`, `save`,
-`load`) is small enough to re-implement on FAISS/pgvector for a million-chunk
-corpus without touching the rest of the pipeline.
+`load`) is small enough to re-implement on another backend without touching the
+rest of the pipeline. One exists: `VECTOR_INDEX=faiss` (`rag/ann.py`, off by
+default) lets an HNSW graph propose the candidates while the store keeps scoring
+them.
