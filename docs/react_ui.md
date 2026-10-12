@@ -55,10 +55,11 @@ then `docker compose --profile api up --build` and open http://localhost:8002.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/health` | Liveness check (`{"status": "ok"}`). |
-| GET | `/api/config[?corpus=NAME][&ui_lang=en\|fr]` | Badges (LLM provider and model, embedding provider, default retrieval mode, refusal threshold, grounding bar), `llm_key_configured` (a boolean only, never a key), pipeline steps, limitations and the selectable answer `languages`. |
+| GET | `/api/config[?corpus=NAME][&ui_lang=en\|fr]` | Badges (LLM provider and model, embedding provider, default retrieval mode, `reranker` model or `null`, refusal threshold, grounding bar), `llm_key_configured` (a boolean only, never a key), pipeline steps, limitations and the selectable answer `languages`. |
 | GET | `/api/corpora[?ui_lang=en\|fr]` | Indexed corpora with documents, chunks, PDF pages, detected languages, file list, available modes and 4 example questions (`examples_by_language`). |
 | GET | `/api/document?corpus=NAME&source=FILE[&q=QUESTION]` | One cited document in full, so a citation can be read in context: `{corpus, source, chars, shown_chars, truncated, text_html}`. `q` only decides which words are marked. |
 | POST | `/api/ask` | `{corpus, question, mode?, top_k?, use_mmr?, language?, ui_lang?}` -> answer, refusal, sources, verification, latency and error. |
+| POST | `/api/ask/stream` | Same body; `text/event-stream` of `sources` (passages, none cited yet), `delta` (`{text}`, raw model text) and a final `done` whose data is exactly the `/api/ask` response. |
 
 `ui_lang` (`en` / `fr`, default `en`) selects the language of the text the API
 *generates itself* — the refusal and grounding explanations, the pipeline steps and
@@ -90,16 +91,30 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 - `sources[]`: `{sid, source, page, location, score, excerpt, excerpt_html, cited}`.
   `excerpt_html` is HTML-escaped server-side and only adds `<mark>` tags and
   `<a>` links on bare `http(s)` URLs (`target="_blank" rel="noopener noreferrer"`).
-- `verification`: `{ok, strict_ok, grounding_score, min_grounding, valid_citations,
-  invalid_citations, uncited_sentences, explanation}`. `strict_ok` also requires
-  that no claim-like sentence is left uncited. Verification runs outside the LLM
-  error handling: a failure there is a bug to surface, not a provider outage.
+- `verification`: `{ok, grounding_score, min_grounding, valid_citations,
+  invalid_citations, uncited_sentences, explanation, nli}`. Verification runs
+  outside the LLM error handling: a failure there is a bug to surface, not a
+  provider outage. `nli` is `null` unless `NLI_CHECK=true`; then it is `{model,
+  error, entailed_fraction, checked, contradicted[], sentences[]}` with, per cited
+  sentence, `{sentence, cited, label, entailment, contradiction, best_source}`. It
+  is reported beside `ok` and never changes it.
 - `latency`: `{retrieval_s, answer_s}`.
 - `error`: `null`, or `{kind: "embedding" | "llm" | "index", message, hint}`.
   `index` means the corpus was indexed with another embedding model than the
   configured one (`IndexMismatchError`): re-run `ingest`. These failures return
   HTTP 200 with the passages still included (none for `index`), as in the
   Streamlit app. Invalid input returns 422, and an unknown corpus returns 404.
+
+`POST /api/ask/stream` returns the same thing as server-sent events. Retrieval,
+the refusal gate and every error path are shared with `/api/ask`, so a refusal or
+a retrieval error is a single `done` event; 422 and 404 are plain JSON errors sent
+before any event. The `delta` events are the model's raw text, for display only:
+citations are normalised and the answer verified once it is complete, so the
+`done` payload — answer, sources, verification — is what `/api/ask` returns for
+the same request, and the client replaces what it streamed with it. A failure
+after some text was streamed ends with `done` carrying an `llm` error and the
+passages. `GET /api/config` reports `stream_answers` (`STREAM_ANSWERS`, default
+`true`); the UI uses the streamed endpoint only when it is set.
 
 ## What the page shows
 
@@ -126,8 +141,14 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
   behind an "Open ... in full" panel under each source.
 - Bare `http(s)` URLs in a passage or a document are clickable. Only those two
   schemes are linked, so a passage cannot hand the reader a `javascript:` target.
-- A verification badge with its explanation, invalid citations and uncited claims.
+- A verification badge with its explanation, invalid citations and uncited claims,
+  and, when the NLI check is on, the share of cited sentences entailed by their
+  passage with the ones that are not (the badge stays the lexical verdict).
 - A refusal panel with the best score against the threshold and the closest passages.
+- While the answer is being written: the passages, then the text so far with a
+  caret, as plain text (citation chips, sources' "cited" accents and the
+  verification badge appear once it is complete, because a marker can be split
+  across two pieces of the stream).
 - An error banner with the actionable hint, latency chips and a loading state.
   A request that exceeds the client-side timeout is aborted and reported in the
   same banner, so a stalled provider never leaves the page spinning.
@@ -138,9 +159,11 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 
 ## Tests
 
-`tests/test_api.py` — **44 tests** — drives the API with FastAPI's `TestClient`.
+`tests/test_api.py` — **45 tests** — drives the API with FastAPI's `TestClient`.
 The index, embedder and LLM are replaced by fakes, so it makes no network calls
-and needs no key. It is part of the 371-test suite (`python -m pytest -q`).
+and needs no key. `tests/test_streaming.py` covers `/api/ask/stream` the same
+way. Both are part of the 416-test suite (`python -m pytest -q`; 1 of them
+skips without `faiss-cpu`).
 
 The React side has no test runner: `web/src` is covered only by the API contract
 above and by hand. `markdown.jsx` is the one place that would matter most, and it

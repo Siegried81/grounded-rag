@@ -145,8 +145,21 @@ separately, and a half-written or hand-edited pair would otherwise return the
 wrong passage for a query with no visible error.
 
 Why not a vector DB: at thousands of chunks, cosine over a NumPy matrix is
-milliseconds, has no dependency, and the index is two inspectable files. A real
-corpus would swap this module for FAISS/pgvector behind the same `search` seam.
+milliseconds, has no dependency, and the index is two inspectable files.
+
+**Optional ANN backend (`rag/ann.py`, `VECTOR_INDEX=faiss`, off by default).** For
+a corpus far larger than the shipped ones, an in-memory FAISS HNSW graph
+(inner product over unit-length copies of the stored vectors, `M = 32`,
+`FAISS_EF_SEARCH = 64`) sits behind the same `store.search`. The graph only
+**proposes** rows: the store scores them with its own cosine expression on its own
+vectors and orders them as the brute-force path does (score, then row), so a
+passage found this way carries the score `SCORE_THRESHOLD` was set against. What
+ANN can change is recall. Measured on the two shipped indexes (stored vectors used
+as queries, `k = CANDIDATE_K = 20`): the FAISS top-20 equalled the brute-force
+top-20, set and order, for **876 of 878** AI Act chunks and **155 of 155** filings
+chunks, with score differences at most 3.6e-7 (float32 rounding). Two misses in
+878 is exactly why it stays off at this scale, where brute force is exact and
+fast. `faiss-cpu` is imported lazily and lives in `requirements-optional.txt`.
 
 ### 4.2 Keyword index (`rag/lexical.py`)
 
@@ -172,8 +185,10 @@ query
         ranked = fused mapped back to Retrieved
     else:
         ranked = dense_pass
+  → if RERANKER: ranked = sort by cross_encoder(q, passage)  # optional, off by default
   → if USE_MMR: ranked = MMR(relevance, ranked vectors, MMR_LAMBDA)   # diversify
-        # relevance = min-max RRF score if fused, else dense cosine
+        # relevance = min-max cross-encoder score if re-ranked,
+        #             else min-max RRF score if fused, else dense cosine
   → return ranked[:TOP_K]
 ```
 
@@ -194,10 +209,25 @@ cosine score remains the single, stable gate.
   leave BM25 with no effect on the final ranking, and raw RRF values are too
   bunched (~0.012–0.033) to weigh against the cosine redundancy term. It is
   skipped gracefully if the store cannot supply vectors (e.g. a test fake).
+- **Cross-encoder re-ranker (`rag/rerank.py`, `RERANKER=cross_encoder`, off by
+  default).** A cross-encoder reads the question and a passage together and
+  scores the pair, which orders a short list more sharply than comparing two
+  separately computed embeddings. It re-orders the pool that passed the gate
+  (dense, or fused in hybrid mode) before MMR and the `TOP_K` cut, and its scores,
+  min-max rescaled, become MMR's relevance term. It never changes a passage's
+  `score` and runs after the gate, so a refusal means exactly what it did; what it
+  changes is which admitted passages reach the model, which is why it is off and
+  why no published number uses it. Model: `RERANK_MODEL`
+  (`cross-encoder/ms-marco-MiniLM-L-6-v2`), loaded once per process on first use;
+  `sentence-transformers` is imported lazily and listed in
+  `requirements-optional.txt`. `scripts/run_eval.py` names the model on its
+  summary line when it is on, so a re-ranked run cannot pass for a default one;
+  `/api/config` reports it as `reranker` and both UIs show it as a badge.
 
 Knobs (all in `config.py`, defaults in brackets): `RETRIEVAL_MODE` (`hybrid`),
 `CANDIDATE_K` (20), `TOP_K` (5), `SCORE_THRESHOLD` (0.35), `USE_MMR` (true),
-`MMR_LAMBDA` (0.6). `config.py` raises at import when `RETRIEVAL_MODE` is neither
+`MMR_LAMBDA` (0.6), `RERANKER` (`none`). `config.py` raises at import when
+`RERANKER` is neither `none` nor `cross_encoder`, or when `RETRIEVAL_MODE` is neither
 `hybrid` nor `dense`: `retrieve` treats anything else as hybrid, so a typo would
 run hybrid while the UIs display the typo.
 
@@ -241,6 +271,18 @@ it serves on the free tier. OpenRouter (`openrouter/free`) and a local Ollama mo
   system prompt telling the model to answer *only* from the sources, cite them
   inline as `[S1]`, say it does not know if they are insufficient, and never use
   outside knowledge.
+
+**Streaming** (`llm.stream`, `answer.stream_answer`) is the same call delivered
+piece by piece: the payload differs only by the provider's `stream` flag, the
+fallback order and key rotation are shared, and a streamed reply is stored under
+the same cache key as a whole one, so either path can serve the other's cache
+entry. Two rules keep it from changing what an answer is. Fallback to the next
+provider only happens while nothing has been shown: once text has reached the
+reader, a failure raises instead of continuing with another model's words. And
+citations are normalised, and the answer verified, on the **complete** text: a
+marker such as `【S1】` can be cut across two deltas, so the deltas are for display
+only and the final answer is exactly what `answer_question` would have returned.
+The evaluation scripts never stream.
 
 ### 6.2 The source fence (indirect prompt injection)
 
@@ -325,10 +367,14 @@ no extra LLM call. `verify_answer(answer, sources, min_grounding)` returns a
   English, French and Dutch stopwords removed) that also appear in the union of
   the **cited, valid** sources' content words. Citing nothing, or citing only
   invalid sources, therefore yields 0.
-- `ok = no invalid citation AND grounding_score ≥ min_grounding`. The app and the
-  evaluations use `VERIFY_MIN_GROUNDING = 0.30`: the score is a proxy, so the bar
-  is deliberately modest.
-- `strict_ok = ok AND no uncited sentence`. `ok` tolerates an uncited sentence
+- `unsupported_numbers` — figures a cited sentence states that appear in none of
+  the sources that sentence cites (thousand separators and decimal commas
+  normalised); `negation_mismatches` — cited sentences that negate while none of
+  their cited sources negates (see `docs/decisions.md`, 2026-10-10).
+- `ok = no invalid citation AND grounding_score ≥ min_grounding AND no unsupported
+  figure`. The app and the evaluations use `VERIFY_MIN_GROUNDING = 0.30`: the
+  score is a proxy, so the bar is deliberately modest.
+- `strict_ok = ok AND no uncited sentence AND no negation mismatch`. `ok` tolerates an uncited sentence
   because a connective or a summary line is not always a claim; `strict_ok` is
   the stricter reading for a reader who wants every sentence cited. Both are
   reported, neither changes the other.
@@ -347,7 +393,31 @@ required") — `aa-03` in §8.2 is that failure, measured, with `verify_ok: true
 a fine wrong by a factor of more than twenty — and it is language-sensitive (see
 §13). It is a guardrail and a
 signal, not an entailment checker; the answer evaluation adds an optional LLM
-judge (§8.2), and an NLI check is on the roadmap.
+judge (§8.2), and an optional NLI check sits beside it (§7.1).
+
+### 7.1 Optional NLI entailment check (`rag/nli.py`, `NLI_CHECK=true`)
+
+Off by default. When on, every sentence that cites a valid source is passed to a
+3-way NLI cross-encoder (`NLI_MODEL`, default
+`cross-encoder/nli-deberta-v3-xsmall`) as the hypothesis, with **each passage that
+sentence cites** as a premise; the passage with the highest entailment
+probability gives the sentence its label (entailment / neutral / contradiction),
+and the highest contradiction probability over its cited passages is kept too.
+Passages are scored one at a time because each fits the model's input window and
+several concatenated might not; the cost is that a claim needing two passages
+together reads as not entailed — a conservative error. The label order is read
+from the model's own `id2label`, and a model that is not 3-way NLI is refused.
+
+It is **reported, never folded in**: `verification.nli` in the API (`null` when
+off), a line under the grounding score in both UIs, and a summary after the
+verification report in the CLI — share of cited sentences entailed, then the
+ones that are not, contradictions first. `ok`, `strict_ok` and `grounding_score`
+are computed exactly as without it, so no published figure changes meaning. It is
+not an oracle either: the model has its own error rate, measured nowhere in this
+project yet, which is the reason it reports rather than gates. A failure (package
+missing, model not found) is returned as `nli.error` beside a still-usable answer.
+`sentence-transformers` is imported lazily and listed in
+`requirements-optional.txt`; the tests use a fake checker and never load a model.
 
 ---
 
@@ -952,7 +1022,9 @@ any network call, so it is unit-tested offline and shared by both UIs:
 
 The original UI, on port 8501. A thin layout file: corpus selector, retrieval
 settings, chat thread, always-visible source cards with scores and highlighted
-excerpts, the verification report and the refusal panel. The refusal threshold is
+excerpts, the verification report and the refusal panel. With `STREAM_ANSWERS`
+(the default) the answer appears as plain text while it is written; citation
+badges, sources and the verification report replace it once it is complete. The refusal threshold is
 shown read-only: changing it changes what a refusal means, so it stays a reviewed
 config value.
 
@@ -960,7 +1032,9 @@ config value.
 
 - **API** (`api/main.py`, FastAPI, port **8002**): `GET /api/health`,
   `GET /api/config[?corpus=]`, `GET /api/corpora`, `GET /api/document`,
-  `POST /api/ask`. It mirrors
+  `POST /api/ask` and `POST /api/ask/stream` (the same request as server-sent
+  events: `sources`, then `delta`s, then `done` carrying exactly the `/api/ask`
+  body; both share one retrieval step and one verification step). It mirrors
   `app.py` call for call, with the same per-corpus caching (`lru_cache`) of the
   store, BM25 index and embedder. Embedding or LLM failures return **HTTP 200 with
   an `error` object and an actionable hint**, plus the passages already retrieved,
@@ -1036,7 +1110,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**371 tests, all passing, all offline.** The whole suite runs with:
+**416 tests, all offline: 415 passing and 1 skipped without `faiss-cpu`, 416 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1087,6 +1161,28 @@ What the suites pin down, beyond per-module unit tests:
   embeds nothing, only changed and new files are embedded, removed files are
   dropped, the result equals a full build (chunks, vectors, BM25), and a changed
   setting, model, missing manifest or corrupt store rebuilds everything.
+- **Streaming** (`test_streaming.py`): OpenAI-style SSE and Ollama NDJSON parsing,
+  fallback only before any text was shown, a streamed reply cached under the
+  same key as a whole one, a citation split across deltas still normalised,
+  `/api/ask/stream` ending with exactly the `/api/ask` body, and `cli.py ask
+  --stream`.
+- **ANN backend** (`test_ann.py`): with a stand-in `faiss` module, the default
+  path never imports faiss, the FAISS path returns the brute-force results and
+  scores when the graph finds them, a missed neighbour is missing without moving
+  any other score, ties keep index order, the graph is rebuilt after `add`, and a
+  missing package is a clear error. One test runs real FAISS (recall@10 ≥ 0.95 on
+  3,000 random vectors, exact scores) and is skipped when it is not installed.
+- **Re-ranker** (`test_rerank.py`, fake cross-encoder, no model loaded): off by
+  default without importing `sentence-transformers`, it re-orders only the pool
+  that passed the gate, never changes a score, cannot promote a passage below the
+  threshold, drives MMR's relevance, loads its model lazily and once, and a
+  missing package is a clear error.
+- **NLI check** (`test_nli.py`, fake checker, no model loaded): each cited
+  sentence is checked against the passages it cites, the best entailing passage
+  wins, invalid citations and refusals check nothing, it is off by default
+  without importing `sentence-transformers`, lexical verification and `ok` are
+  identical with it on, label order is read from the model, and failures are
+  reported rather than raised; the API carries it as `verification.nli`.
 
 The live evaluations (§8.2, §8.3) are the complement: tests prove the code does
 what it says, evaluations measure how well the system behaves with a real model.
@@ -1098,7 +1194,8 @@ what it says, evaluations measure how well the system behaves with a real model.
 - **Lexical grounding only.** The grounding score counts shared words, not
   meaning. A negation flip or a wrong number in a sentence that reuses the
   source's vocabulary scores well. The optional LLM judge is a stronger, costlier
-  signal; there is no NLI check yet.
+  signal, and the optional NLI check (§7.1) reports entailment per cited
+  sentence beside the score; neither has been run on the evaluation sets yet.
 - **Grounding scores are not comparable across languages.** `verify` tokenises
   Unicode words and drops English, French and Dutch stopwords, so accented words
   stay whole and French function words no longer count as content, but the
@@ -1113,7 +1210,7 @@ what it says, evaluations measure how well the system behaves with a real model.
   `verify_ok: true`, citation validity 1.000, and an answer wrong by a factor of
   more than twenty. Nothing downstream of the model can catch that class of error
   with lexical signals alone, which is why the full cited document is one click
-  away in both UIs and why the NLI item is first on the roadmap.
+  away in both UIs and why the optional NLI check (§7.1) was built.
 - **Heuristic refusal detection, measured failing.** Both the answer evaluation and
   the red team recognise model-side refusals by phrase lists. A hedged first
   sentence on an answerable question is scored as a refusal; a refusal worded
@@ -1174,11 +1271,12 @@ what it says, evaluations measure how well the system behaves with a real model.
   the app answering, but a fallback answer comes from a different model.
 - **Heuristic sentence splitter.** Over-splits on abbreviations; acceptable for
   chunk boundaries, not a linguistic tokenizer.
-- **Brute-force dense search.** Fine to ~10⁴–10⁵ chunks; beyond that, swap in an
-  ANN index behind `store.search`.
+- **Brute-force dense search.** Fine to ~10⁴–10⁵ chunks; beyond that, the
+  optional FAISS backend behind `store.search` (§4.1) trades a little recall for
+  speed. pgvector is not implemented.
 - **One-shot generation.** No multi-hop / query decomposition for questions that
-  need evidence spread across many passages, and no streaming: the UI waits for
-  the full answer.
+  need evidence spread across many passages. (Streaming is in place: the UIs
+  show the answer as it is written; it does not change how it is generated.)
 
 ### 13.1 The refusal gate's limit is not a tuning problem
 
@@ -1251,17 +1349,22 @@ standard.
    right place for them); widening `_STRONG_REFUSAL_RE` so a real refusal like
    `jb-01`'s is not scored as a failure; and re-running the answer evaluation once
    so the key-fact figures are measured rather than projected (§8.2).
-2. **Cross-encoder re-ranker** over the fused candidate pool before `TOP_K`, for a
-   sharper final ordering than MMR alone — the main lever on the filings MRR.
-3. **Semantic faithfulness**: an NLI entailment check per cited sentence, and/or
-   the existing LLM judge promoted from opt-in to a regular part of the answer
-   evaluation, on top of the lexical proxy.
+2. ~~**Cross-encoder re-ranker**~~ — built, off by default: `RERANKER=cross_encoder`
+   (§5). Still to do: measure it with `scripts/run_eval.py` against the published
+   retrieval tables (the main lever expected on the filings MRR) before deciding
+   whether it should become the default.
+3. **Semantic faithfulness**: the NLI entailment check per cited sentence is
+   built (§7.1, `NLI_CHECK=true`, off by default). Still to do: run it on the
+   answer evaluation, measure its agreement with the key-fact and judge verdicts
+   (`aa-03` is the first row to check), and/or promote the LLM judge from opt-in
+   to a regular part of the answer evaluation.
 4. **Larger eval sets**: more answer questions per corpus, more unanswerable
    traps, several companies' 10-Ks, and more red-team cases per category, so
    rates move in steps smaller than 5%.
-5. **Answer streaming** in the CLI, Streamlit and the React UI (server-sent
-   events from FastAPI), with verification run once the stream completes.
-6. **ANN store** (FAISS/pgvector) behind the existing `search` seam for larger
-   corpora.
+5. ~~**Answer streaming**~~ — done: `POST /api/ask/stream` (server-sent events),
+   consumed by the React UI, Streamlit and `cli.py ask --stream`, with
+   verification run once the stream completes (§6.1, §10.3).
+6. ~~**ANN store**~~ — done for FAISS: `VECTOR_INDEX=faiss`, off by default,
+   behind the existing `search` seam (§4.1). pgvector is not implemented.
 7. ~~**Incremental ingest**~~ — done: `cli.py ingest --incremental`, keyed on
    file sha256, writing the same index as a full build (§3.3).

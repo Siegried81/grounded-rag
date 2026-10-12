@@ -106,7 +106,10 @@ def main() -> None:
     n = len(items) or 1
     print("-" * 80)
     effective = args.mode if bm25 is not None else "dense"
-    print(f"questions={len(items)} k={args.k} mode={effective} corpus={args.corpus}")
+    # The re-ranker is named only when it is on, so a default run prints the
+    # line it always printed and a re-ranked run cannot pass for a default one.
+    rerank_note = f" reranker={config.RERANK_MODEL}" if config.RERANKER != "none" else ""
+    print(f"questions={len(items)} k={args.k} mode={effective} corpus={args.corpus}{rerank_note}")
     n_hits = int(sum(hits))
     print(
         f"recall@{args.k}={sum(recalls) / n:.3f}  "

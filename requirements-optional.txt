@@ -1,0 +1,14 @@
+# Optional extras, never needed by the default install or by the test suite
+# (their tests use stand-ins and never download a model; the one test that
+# runs real FAISS skips when it is missing). Install on top of
+# requirements.txt only for the feature you switch on.
+
+# VECTOR_INDEX=faiss: approximate dense search for large corpora (rag/ann.py).
+faiss-cpu>=1.8
+
+# Needed by two switches, each loading its own model on first use; pulls in
+# torch:
+# - RERANKER=cross_encoder: cross-encoder re-ranking of the candidate pool
+#   (rag/rerank.py).
+# - NLI_CHECK=true: NLI entailment per cited sentence (rag/nli.py).
+sentence-transformers>=3.0

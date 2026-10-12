@@ -24,6 +24,7 @@ const en = {
   badgeRetrieval: "retrieval: {value}",
   badgeLlm: "LLM: {provider} · {model}",
   badgeEmbeddings: "embeddings: {value}",
+  badgeReranker: "re-ranker: {value}",
   badgeRefusal: "refusal below {value} cosine",
   badgeNoKey: "no LLM key set",
 
@@ -125,6 +126,10 @@ const en = {
   grounding: "grounding",
   invalidCitations: "Invalid citations (no such source): {list}",
   uncitedClaims: "Claims without a citation:",
+  nliScore: "NLI entailment {value} ({n} cited sentences, {model})",
+  nliNone: "NLI check: no cited sentence to check.",
+  nliUnavailable: "NLI check unavailable: {error}",
+  nliLabel: { neutral: "not entailed", contradiction: "contradicted" },
 
   timings: "Timings",
   retrievalTime: "retrieval {s}s",
@@ -141,6 +146,7 @@ const fr = {
   badgeRetrieval: "recherche : {value}",
   badgeLlm: "LLM : {provider} · {model}",
   badgeEmbeddings: "embeddings : {value}",
+  badgeReranker: "re-classement : {value}",
   badgeRefusal: "refus sous {value} cosinus",
   badgeNoKey: "aucune clé LLM configurée",
 
@@ -236,6 +242,10 @@ const fr = {
   grounding: "ancrage",
   invalidCitations: "Citations invalides (source inexistante) : {list}",
   uncitedClaims: "Affirmations sans citation :",
+  nliScore: "Implication NLI {value} ({n} phrases citées, {model})",
+  nliNone: "Vérification NLI : aucune phrase citée à vérifier.",
+  nliUnavailable: "Vérification NLI indisponible : {error}",
+  nliLabel: { neutral: "non impliquée", contradiction: "contredite" },
 
   timings: "Durées",
   retrievalTime: "recherche {s} s",
