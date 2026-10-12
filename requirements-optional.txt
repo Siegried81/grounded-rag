@@ -1,6 +1,11 @@
 # Optional extras, never needed by the default install or by the test suite
-# (their tests skip when a package is missing). Install on top of
+# (their tests use stand-ins and never download a model; the one test that
+# runs real FAISS skips when it is missing). Install on top of
 # requirements.txt only for the feature you switch on.
 
 # VECTOR_INDEX=faiss: approximate dense search for large corpora (rag/ann.py).
 faiss-cpu>=1.8
+
+# RERANKER=cross_encoder: cross-encoder re-ranking of the candidate pool
+# (rag/rerank.py). Pulls in torch; the model downloads on first use.
+sentence-transformers>=3.0

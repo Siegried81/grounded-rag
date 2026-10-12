@@ -24,6 +24,7 @@ const en = {
   badgeRetrieval: "retrieval: {value}",
   badgeLlm: "LLM: {provider} · {model}",
   badgeEmbeddings: "embeddings: {value}",
+  badgeReranker: "re-ranker: {value}",
   badgeRefusal: "refusal below {value} cosine",
   badgeNoKey: "no LLM key set",
 
@@ -141,6 +142,7 @@ const fr = {
   badgeRetrieval: "recherche : {value}",
   badgeLlm: "LLM : {provider} · {model}",
   badgeEmbeddings: "embeddings : {value}",
+  badgeReranker: "re-classement : {value}",
   badgeRefusal: "refus sous {value} cosinus",
   badgeNoKey: "aucune clé LLM configurée",
 

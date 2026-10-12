@@ -64,6 +64,16 @@ if VECTOR_INDEX not in ("numpy", "faiss"):
     raise ValueError(f"VECTOR_INDEX must be 'numpy' or 'faiss', got {VECTOR_INDEX!r}")
 # HNSW search beam: higher is slower and closer to exact.
 FAISS_EF_SEARCH = int(os.getenv("FAISS_EF_SEARCH", "64"))
+# Optional cross-encoder re-ranker over the candidate pool that passed the gate,
+# before MMR and TOP_K (rag/rerank.py). "none" (default) is the pipeline every
+# published number was measured with; "cross_encoder" re-orders passages, so it
+# changes which ones reach the model, but never a score or the refusal gate.
+# Needs `sentence-transformers` (requirements-optional.txt) and downloads
+# RERANK_MODEL on first use.
+RERANKER = os.getenv("RERANKER", "none").strip().lower()
+if RERANKER not in ("none", "cross_encoder"):
+    raise ValueError(f"RERANKER must be 'none' or 'cross_encoder', got {RERANKER!r}")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 # --- Chunking / ingestion ----------------------------------------------------
 # "smart" packs whole sentences (better passages & citations); "char" is the
