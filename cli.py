@@ -13,11 +13,21 @@ import config
 
 
 def cmd_ingest(args) -> int:
-    """Build and save the index for a corpus, then report its size and location."""
+    """Build and save the index for a corpus, then report its size and location.
+
+    With --incremental, also say which files were reused unchanged, which were
+    (re)processed and which were dropped, so a run that silently rebuilt
+    everything (no manifest yet, changed settings) is visible as such.
+    """
     from rag.ingest import ingest_corpus
 
-    store = ingest_corpus(args.corpus)
+    report: dict = {}
+    store = ingest_corpus(args.corpus, incremental=args.incremental or None, report=report)
     print(f"Indexed {len(store)} chunks for '{args.corpus}' in {config.index_path(args.corpus)}")
+    if args.incremental or config.INCREMENTAL_INGEST:
+        print(f"  files reused unchanged: {len(report['reused'])}, "
+              f"processed: {len(report['processed'])}, removed: {len(report['removed'])}, "
+              f"chunks needing a vector: {report['new_chunks']}")
     return 0
 
 
@@ -69,6 +79,8 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
     p_ingest = sub.add_parser("ingest", help="build the index for a corpus")
     p_ingest.add_argument("--corpus", required=True)
+    p_ingest.add_argument("--incremental", action="store_true",
+                          help="only re-chunk and re-embed new or changed files (by sha256)")
     p_ingest.set_defaults(func=cmd_ingest)
     p_ask = sub.add_parser("ask", help="ask a question about a corpus")
     p_ask.add_argument("--corpus", required=True)
