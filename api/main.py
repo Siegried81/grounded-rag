@@ -416,7 +416,7 @@ def _answered(out: dict, req: AskRequest, retrieved, text: str, elapsed: float) 
             report.grounding_score, config.VERIFY_MIN_GROUNDING, report.ok, lang=req.ui_lang
         ),
         # null unless NLI_CHECK is on; reported beside `ok`, never changing it.
-        "nli": nli_summary(answer.text, retrieved),
+        "nli": nli_summary(text, retrieved),
     }
     return out
 
