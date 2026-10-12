@@ -43,6 +43,11 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
   on-disk LLM response cache.
 - **Two UIs** (React + FastAPI on port 8002, or Streamlit), **Docker**, and one
   structured LLM call per question — no agent loop.
+- **Answer streaming**: both UIs show the answer while the model writes it
+  (server-sent events from `POST /api/ask/stream`; `cli.py ask --stream`).
+  Citations are normalised and the answer verified once the stream is complete,
+  so a streamed answer is the same answer, with the same checks, as a whole one.
+  `STREAM_ANSWERS=false` turns it off in the UIs.
 - **Language choice**: interface in English or French, answers in English by
   default (or auto / French / Dutch) whatever the language of the sources.
 
@@ -206,6 +211,7 @@ ollama pull llama3.2:3b               # only needed for the Ollama generation fa
 
 python cli.py ingest --corpus ai_act_sections
 python cli.py ask --corpus ai_act_sections "What are the obligations for high-risk AI systems?"
+python cli.py ask --stream --corpus ai_act_sections "Which AI practices are prohibited?"  # print as generated
 ```
 
 `config.py` refuses to import with an invalid `RETRIEVAL_MODE`, and a corpus
@@ -280,7 +286,7 @@ With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **361 passing**, the whole suite offline (fake embedder,
+`python -m pytest -q` — **378 passing**, the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations

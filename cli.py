@@ -21,6 +21,33 @@ def cmd_ingest(args) -> int:
     return 0
 
 
+def _print_streamed(question: str, retrieved):
+    """Print the answer as the model writes it; return the final Answer.
+
+    What is printed is the raw model text. Citations are normalised on the whole
+    text once it is complete (see answer.stream_answer), so when that changes
+    anything (e.g. "【S1】" -> "[S1]") the normalised answer, which is the one
+    verified below, is printed again rather than left implicit.
+    """
+    from rag.answer import stream_answer
+
+    parts: list[str] = []
+    answer = None
+    for kind, value in stream_answer(question, retrieved):
+        if kind == "delta":
+            parts.append(value)
+            print(value, end="", flush=True)
+        else:
+            answer = value
+    if not parts:  # refusal: nothing was streamed
+        print(answer.text)
+        return answer
+    print()
+    if answer.text != "".join(parts):
+        print("\nWith citations normalised:\n" + answer.text)
+    return answer
+
+
 def cmd_ask(args) -> int:
     """Answer a question from a saved index, with hybrid retrieval and verification."""
     from rag.answer import answer_question
@@ -45,9 +72,11 @@ def cmd_ask(args) -> int:
     question = " ".join(args.question)
     embedder = get_embedder()
     retrieved = retrieve(question, store, embedder, bm25=bm25)
-    answer = answer_question(question, retrieved)
-
-    print(answer.text)
+    if args.stream:
+        answer = _print_streamed(question, retrieved)
+    else:
+        answer = answer_question(question, retrieved)
+        print(answer.text)
     if not answer.refused:
         print("\nSources:")
         for i, src in enumerate(answer.sources, 1):
@@ -72,6 +101,8 @@ def main() -> None:
     p_ingest.set_defaults(func=cmd_ingest)
     p_ask = sub.add_parser("ask", help="ask a question about a corpus")
     p_ask.add_argument("--corpus", required=True)
+    p_ask.add_argument("--stream", action="store_true",
+                       help="print the answer as it is generated (verified once complete)")
     p_ask.add_argument("question", nargs="+")
     p_ask.set_defaults(func=cmd_ask)
     args = parser.parse_args()

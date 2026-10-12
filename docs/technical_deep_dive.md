@@ -221,6 +221,18 @@ it serves on the free tier. OpenRouter (`openrouter/free`) and a local Ollama mo
   inline as `[S1]`, say it does not know if they are insufficient, and never use
   outside knowledge.
 
+**Streaming** (`llm.stream`, `answer.stream_answer`) is the same call delivered
+piece by piece: the payload differs only by the provider's `stream` flag, the
+fallback order and key rotation are shared, and a streamed reply is stored under
+the same cache key as a whole one, so either path can serve the other's cache
+entry. Two rules keep it from changing what an answer is. Fallback to the next
+provider only happens while nothing has been shown: once text has reached the
+reader, a failure raises instead of continuing with another model's words. And
+citations are normalised, and the answer verified, on the **complete** text: a
+marker such as `【S1】` can be cut across two deltas, so the deltas are for display
+only and the final answer is exactly what `answer_question` would have returned.
+The evaluation scripts never stream.
+
 ### 6.2 The source fence (indirect prompt injection)
 
 Retrieved text is untrusted. An indexed document — or anything a future ingestion
@@ -931,7 +943,9 @@ any network call, so it is unit-tested offline and shared by both UIs:
 
 The original UI, on port 8501. A thin layout file: corpus selector, retrieval
 settings, chat thread, always-visible source cards with scores and highlighted
-excerpts, the verification report and the refusal panel. The refusal threshold is
+excerpts, the verification report and the refusal panel. With `STREAM_ANSWERS`
+(the default) the answer appears as plain text while it is written; citation
+badges, sources and the verification report replace it once it is complete. The refusal threshold is
 shown read-only: changing it changes what a refusal means, so it stays a reviewed
 config value.
 
@@ -939,7 +953,9 @@ config value.
 
 - **API** (`api/main.py`, FastAPI, port **8002**): `GET /api/health`,
   `GET /api/config[?corpus=]`, `GET /api/corpora`, `GET /api/document`,
-  `POST /api/ask`. It mirrors
+  `POST /api/ask` and `POST /api/ask/stream` (the same request as server-sent
+  events: `sources`, then `delta`s, then `done` carrying exactly the `/api/ask`
+  body; both share one retrieval step and one verification step). It mirrors
   `app.py` call for call, with the same per-corpus caching (`lru_cache`) of the
   store, BM25 index and embedder. Embedding or LLM failures return **HTTP 200 with
   an `error` object and an actionable hint**, plus the passages already retrieved,
@@ -1015,7 +1031,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**339 tests, all passing, all offline.** The whole suite runs with:
+**378 tests, all passing, all offline.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1045,7 +1061,7 @@ What the suites pin down, beyond per-module unit tests:
   `1m2.5s`, `250ms`), all-keys-limited → one capped wait → retry, the cap and the
   0 = disabled switch, no wait on a non-429 failure, cache hit on an identical
   request, cache miss when the model changes, failures never cached.
-- **Answer metrics** (`test_answer_metrics.py`, 71 tests): refusal detection in
+- **Answer metrics** (`test_answer_metrics.py`, 78 tests): refusal detection in
   EN/FR including the partial-answer rule, `None` on empty denominators, numeric
   fact matching across groupings, scales and French decimals, judge-reply parsing.
 - **Red team** (`test_redteam.py`): an out-of-scope case refuses before any LLM
@@ -1062,6 +1078,11 @@ What the suites pin down, beyond per-module unit tests:
   no content leaked.
 - **UI helpers** (`test_ui_helpers.py`): escaping before highlighting, citation
   badges, refusal and error explanations.
+- **Streaming** (`test_streaming.py`): OpenAI-style SSE and Ollama NDJSON parsing,
+  fallback only before any text was shown, a streamed reply cached under the
+  same key as a whole one, a citation split across deltas still normalised,
+  `/api/ask/stream` ending with exactly the `/api/ask` body, and `cli.py ask
+  --stream`.
 
 The live evaluations (§8.2, §8.3) are the complement: tests prove the code does
 what it says, evaluations measure how well the system behaves with a real model.
@@ -1152,7 +1173,8 @@ what it says, evaluations measure how well the system behaves with a real model.
 - **Brute-force dense search.** Fine to ~10⁴–10⁵ chunks; beyond that, swap in an
   ANN index behind `store.search`.
 - **One-shot generation.** No multi-hop / query decomposition for questions that
-  need evidence spread across many passages, and no streaming: the UI waits for
+  need evidence spread across many passages. (Streaming is in place: the UIs
+  show the answer as it is written; it does not change how it is generated.)
   the full answer.
 
 ### 13.1 The refusal gate's limit is not a tuning problem
@@ -1234,8 +1256,9 @@ standard.
 4. **Larger eval sets**: more answer questions per corpus, more unanswerable
    traps, several companies' 10-Ks, and more red-team cases per category, so
    rates move in steps smaller than 5%.
-5. **Answer streaming** in the CLI, Streamlit and the React UI (server-sent
-   events from FastAPI), with verification run once the stream completes.
+5. ~~**Answer streaming**~~ — done: `POST /api/ask/stream` (server-sent events),
+   consumed by the React UI, Streamlit and `cli.py ask --stream`, with
+   verification run once the stream completes (§6.1, §10.3).
 6. **ANN store** (FAISS/pgvector) behind the existing `search` seam for larger
    corpora.
 7. **Incremental ingest** keyed on file hashes (the embedding cache already makes
