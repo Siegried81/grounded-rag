@@ -108,6 +108,27 @@ model guarantees a cached vector from one model is never served for another
 (different embedding spaces are not comparable). Re-ingesting an unchanged corpus
 therefore embeds nothing.
 
+### 3.3 Incremental ingest (`ingest_corpus(..., incremental=True)`)
+
+The cache saves the embedding calls but a rebuild still reads and chunks every
+file. With `cli.py ingest --incremental` (or `INCREMENTAL_INGEST=true`; off by
+default), a file whose **sha256** matches the previous build's
+`index/<corpus>/manifest.json` keeps its chunks and vectors from the stored index;
+new and changed files are chunked and embedded; files no longer in the folder are
+not carried over. Every build, full or incremental, writes the manifest (per file:
+hash and chunk count; plus the chunker, `CHUNK_SIZE`, `CHUNK_OVERLAP` and the
+embedding model). Any of those settings changing, a missing manifest, or a store
+that disagrees with it makes the affected files — or all of them — rebuild.
+
+The guarantee is that the result is **the index a full build would write**:
+files are assembled in the same sorted order, a chunk's id depends only on its
+own file, and BM25 is always rebuilt from all chunks because its term statistics
+are corpus-wide. Measured on the shipped `ai_act_sections` folder with the fake
+embedder and the cache off: after changing one file and deleting another, the
+incremental run embedded **3 chunks instead of 878**, reused 306 files, and wrote
+a `store.json`, `vectors.npy` and `bm25.json` byte-identical to a full rebuild of
+the same folder. `tests/test_incremental_ingest.py` pins that equality down.
+
 ---
 
 ## 4. Indexes
@@ -1015,7 +1036,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**339 tests, all passing, all offline.** The whole suite runs with:
+**371 tests, all passing, all offline.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1045,7 +1066,7 @@ What the suites pin down, beyond per-module unit tests:
   `1m2.5s`, `250ms`), all-keys-limited → one capped wait → retry, the cap and the
   0 = disabled switch, no wait on a non-429 failure, cache hit on an identical
   request, cache miss when the model changes, failures never cached.
-- **Answer metrics** (`test_answer_metrics.py`, 71 tests): refusal detection in
+- **Answer metrics** (`test_answer_metrics.py`, 78 tests): refusal detection in
   EN/FR including the partial-answer rule, `None` on empty denominators, numeric
   fact matching across groupings, scales and French decimals, judge-reply parsing.
 - **Red team** (`test_redteam.py`): an out-of-scope case refuses before any LLM
@@ -1062,6 +1083,10 @@ What the suites pin down, beyond per-module unit tests:
   no content leaked.
 - **UI helpers** (`test_ui_helpers.py`): escaping before highlighting, citation
   badges, refusal and error explanations.
+- **Incremental ingest** (`test_incremental_ingest.py`): an unchanged corpus
+  embeds nothing, only changed and new files are embedded, removed files are
+  dropped, the result equals a full build (chunks, vectors, BM25), and a changed
+  setting, model, missing manifest or corrupt store rebuilds everything.
 
 The live evaluations (§8.2, §8.3) are the complement: tests prove the code does
 what it says, evaluations measure how well the system behaves with a real model.
@@ -1238,5 +1263,5 @@ standard.
    events from FastAPI), with verification run once the stream completes.
 6. **ANN store** (FAISS/pgvector) behind the existing `search` seam for larger
    corpora.
-7. **Incremental ingest** keyed on file hashes (the embedding cache already makes
-   re-embedding free; this would skip unchanged files end to end).
+7. ~~**Incremental ingest**~~ — done: `cli.py ingest --incremental`, keyed on
+   file sha256, writing the same index as a full build (§3.3).
