@@ -105,3 +105,14 @@ def test_defaults_point_at_the_sections_corpus_and_its_eval_file(run_eval, monke
     run_eval.main()
     assert asked == ["filings_sections"]
     assert "corpus=filings_sections" in capsys.readouterr().out
+
+
+def test_eval_names_the_reranker_only_when_it_is_on(run_eval, monkeypatch, capsys):
+    monkeypatch.setattr(run_eval.BM25Index, "load", staticmethod(lambda path: "bm25"))
+    monkeypatch.setattr(run_eval.config, "RERANKER", "none")
+    _main(run_eval, monkeypatch)
+    assert "reranker=" not in capsys.readouterr().out
+    monkeypatch.setattr(run_eval.config, "RERANKER", "cross_encoder")
+    monkeypatch.setattr(run_eval.config, "RERANK_MODEL", "some/cross-encoder")
+    _main(run_eval, monkeypatch)
+    assert "reranker=some/cross-encoder" in capsys.readouterr().out

@@ -7,7 +7,9 @@ embeddings miss, and MMR reorders the survivors to drop near-duplicate passages.
 The refusal rule is deliberately anchored to the DENSE cosine score: if nothing
 clears `threshold` there, we return [] (the caller's signal to refuse) regardless
 of retrieval mode. Hybrid fusion and MMR only reorder/diversify passages that are
-already semantically relevant — they never lower the bar for answering.
+already semantically relevant — they never lower the bar for answering. The
+optional cross-encoder re-ranker (rag/rerank.py, off by default) follows the
+same rule: it re-orders the admitted pool and never changes a score.
 
 Kept as a thin function over duck-typed `store`, `embedder` and `bm25` so it stays
 testable with fakes and the backends remain swappable.
@@ -17,7 +19,12 @@ from __future__ import annotations
 
 import config
 from rag.fusion import mmr, reciprocal_rank_fusion
+from rag.rerank import get_reranker, rerank
 from rag.types import Retrieved
+
+# Default of `retrieve(reranker=...)`: take the re-ranker from config.RERANKER.
+# None cannot serve, because None is how a caller asks for no re-ranking.
+_FROM_CONFIG = object()
 
 
 class IndexMismatchError(ValueError):
@@ -51,13 +58,20 @@ def retrieve(
     mode: str | None = None,
     use_mmr: bool | None = None,
     candidate_k: int | None = None,
+    reranker=_FROM_CONFIG,
 ) -> list[Retrieved]:
     """Return up to `top_k` chunks for `question`, or [] to signal a refusal.
 
     With `bm25` supplied and `mode="hybrid"`, dense and keyword rankings are fused;
     otherwise retrieval is dense-only. An empty result means nothing in the corpus
     is similar enough (by dense cosine) to ground an answer.
+
+    `reranker` (default: `config.RERANKER`, which is off) re-orders the pool that
+    passed the gate before MMR and the `top_k` cut; None disables it. Anything
+    with `score(question, passages) -> list[float]` will do.
     """
+    if reranker is _FROM_CONFIG:
+        reranker = get_reranker()
     mode = mode or config.RETRIEVAL_MODE
     use_mmr = config.USE_MMR if use_mmr is None else use_mmr
     candidate_k = candidate_k or config.CANDIDATE_K
@@ -72,7 +86,7 @@ def retrieve(
         return []
 
     # Relevance MMR should diversify: None means dense cosine (dense mode).
-    fused_scores: dict[str, float] | None = None
+    rel_scores: dict[str, float] | None = None
     if mode == "dense" or bm25 is None:
         ranked = dense_pass
     else:
@@ -87,21 +101,27 @@ def retrieve(
             [[r.chunk.id for r in dense_pass], [r.chunk.id for r in sparse]]
         )
         ranked = [by_id[cid] for cid, _ in fused if cid in by_id]
-        fused_scores = dict(fused)
+        rel_scores = dict(fused)
+
+    if reranker is not None and len(ranked) > 1:
+        # A sharper ORDER for the admitted pool; scores (and the gate) untouched.
+        # The cross-encoder's scores become MMR's relevance, as RRF's are above.
+        ranked, rel_scores = rerank(question, ranked, reranker)
 
     if use_mmr and len(ranked) > 1 and hasattr(store, "vectors_for_ids"):
         vecs = store.vectors_for_ids([r.chunk.id for r in ranked])
         candidates = [(r.chunk.id, vecs[r.chunk.id]) for r in ranked if r.chunk.id in vecs]
         if candidates:
             relevance = None
-            if fused_scores is not None:
+            if rel_scores is not None:
                 # In hybrid mode MMR must diversify the fused ranking: scoring
                 # relevance by dense cosine would discard the BM25 contribution.
                 # RRF scores are min-max rescaled to 0..1 to sit on the same
                 # footing as the redundancy (cosine) term. Raw RRF values are
                 # bunched (~0.012-0.033); dividing by the max alone left them
                 # all near 1, so redundancy dominated and relevance was lost.
-                raw = [fused_scores[cid] for cid, _ in candidates]
+                # Cross-encoder scores (logits, any sign) are rescaled the same way.
+                raw = [rel_scores[cid] for cid, _ in candidates]
                 lo, hi = min(raw), max(raw)
                 relevance = [(s - lo) / (hi - lo) if hi > lo else 1.0 for s in raw]
             order = mmr(

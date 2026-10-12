@@ -54,6 +54,16 @@ CANDIDATE_K = int(os.getenv("CANDIDATE_K", "20"))
 # passages; lambda 1.0 is pure relevance, 0.0 pure diversity.
 USE_MMR = os.getenv("USE_MMR", "true").lower() == "true"
 MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.6"))
+# Optional cross-encoder re-ranker over the candidate pool that passed the gate,
+# before MMR and TOP_K (rag/rerank.py). "none" (default) is the pipeline every
+# published number was measured with; "cross_encoder" re-orders passages, so it
+# changes which ones reach the model, but never a score or the refusal gate.
+# Needs `sentence-transformers` (requirements-optional.txt) and downloads
+# RERANK_MODEL on first use.
+RERANKER = os.getenv("RERANKER", "none").strip().lower()
+if RERANKER not in ("none", "cross_encoder"):
+    raise ValueError(f"RERANKER must be 'none' or 'cross_encoder', got {RERANKER!r}")
+RERANK_MODEL = os.getenv("RERANK_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 # --- Chunking / ingestion ----------------------------------------------------
 # "smart" packs whole sentences (better passages & citations); "char" is the

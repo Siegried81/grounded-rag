@@ -203,6 +203,7 @@ def get_config(
         "retrieval_mode": config.RETRIEVAL_MODE,
         "top_k": min(config.TOP_K, 10),
         "use_mmr": config.USE_MMR,
+        "reranker": None if config.RERANKER == "none" else config.RERANK_MODEL,
         "refusal_threshold": config.SCORE_THRESHOLD,
         "min_grounding": config.VERIFY_MIN_GROUNDING,
         "llm_key_configured": llm_key_configured(),

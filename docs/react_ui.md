@@ -55,7 +55,7 @@ then `docker compose --profile api up --build` and open http://localhost:8002.
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/api/health` | Liveness check (`{"status": "ok"}`). |
-| GET | `/api/config[?corpus=NAME][&ui_lang=en\|fr]` | Badges (LLM provider and model, embedding provider, default retrieval mode, refusal threshold, grounding bar), `llm_key_configured` (a boolean only, never a key), pipeline steps, limitations and the selectable answer `languages`. |
+| GET | `/api/config[?corpus=NAME][&ui_lang=en\|fr]` | Badges (LLM provider and model, embedding provider, default retrieval mode, `reranker` model or `null`, refusal threshold, grounding bar), `llm_key_configured` (a boolean only, never a key), pipeline steps, limitations and the selectable answer `languages`. |
 | GET | `/api/corpora[?ui_lang=en\|fr]` | Indexed corpora with documents, chunks, PDF pages, detected languages, file list, available modes and 4 example questions (`examples_by_language`). |
 | GET | `/api/document?corpus=NAME&source=FILE[&q=QUESTION]` | One cited document in full, so a citation can be read in context: `{corpus, source, chars, shown_chars, truncated, text_html}`. `q` only decides which words are marked. |
 | POST | `/api/ask` | `{corpus, question, mode?, top_k?, use_mmr?, language?, ui_lang?}` -> answer, refusal, sources, verification, latency and error. |
@@ -138,9 +138,9 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 
 ## Tests
 
-`tests/test_api.py` — **44 tests** — drives the API with FastAPI's `TestClient`.
+`tests/test_api.py` — **45 tests** — drives the API with FastAPI's `TestClient`.
 The index, embedder and LLM are replaced by fakes, so it makes no network calls
-and needs no key. It is part of the 339-test suite (`python -m pytest -q`).
+and needs no key. It is part of the 371-test suite (`python -m pytest -q`).
 
 The React side has no test runner: `web/src` is covered only by the API contract
 above and by hand. `markdown.jsx` is the one place that would matter most, and it
