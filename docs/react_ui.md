@@ -140,7 +140,7 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 
 `tests/test_api.py` — **44 tests** — drives the API with FastAPI's `TestClient`.
 The index, embedder and LLM are replaced by fakes, so it makes no network calls
-and needs no key. It is part of the 339-test suite (`python -m pytest -q`).
+and needs no key. It is part of the 368-test suite (367 run, 1 skipped without `faiss-cpu`) (`python -m pytest -q`).
 
 The React side has no test runner: `web/src` is covered only by the API contract
 above and by hand. `markdown.jsx` is the one place that would matter most, and it

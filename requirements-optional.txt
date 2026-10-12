@@ -1,0 +1,6 @@
+# Optional extras, never needed by the default install or by the test suite
+# (their tests skip when a package is missing). Install on top of
+# requirements.txt only for the feature you switch on.
+
+# VECTOR_INDEX=faiss: approximate dense search for large corpora (rag/ann.py).
+faiss-cpu>=1.8
