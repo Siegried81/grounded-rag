@@ -57,6 +57,33 @@ function Sources({ title, sources, turnId, flashSid, onOpenDocument }) {
   );
 }
 
+/** The optional NLI check (`verification.nli`, null when NLI_CHECK is off). It
+ * sits under the grounding score and never changes the verified/issues badge,
+ * which stays the lexical verdict. Contradictions are listed first. */
+function Nli({ nli }) {
+  const { t } = useT();
+  if (!nli) return null;
+  if (nli.error) return <p className="caption">{t("nliUnavailable", { error: nli.error })}</p>;
+  if (nli.entailed_fraction == null) return <p className="caption">{t("nliNone")}</p>;
+  const flagged = nli.sentences
+    .filter((s) => s.label !== "entailment")
+    .sort((a, b) => (a.label === "contradiction" ? 0 : 1) - (b.label === "contradiction" ? 0 : 1));
+  return (
+    <div className="verify-issue">
+      {t("nliScore", { value: nli.entailed_fraction.toFixed(2), n: nli.checked, model: nli.model })}
+      {flagged.length > 0 && (
+        <ul>
+          {flagged.map((s, i) => (
+            <li key={i}>
+              <em>{t(`nliLabel.${s.label}`)}</em>: {s.sentence}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Verification({ v }) {
   const { t } = useT();
   return (
@@ -68,6 +95,7 @@ function Verification({ v }) {
         </span>
       </div>
       <p className="caption">{v.explanation}</p>
+      <Nli nli={v.nli} />
       {v.invalid_citations.length > 0 && (
         <p className="verify-issue">
           {t("invalidCitations", { list: v.invalid_citations.map((n) => `[S${n}]`).join(", ") })}

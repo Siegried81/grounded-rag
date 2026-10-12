@@ -33,6 +33,7 @@ from rag.answer import answer_question
 from rag.embed import get_embedder
 from rag.ingest import document_paths, read_document
 from rag.lexical import BM25Index
+from rag.nli import nli_summary
 from rag.retrieve import IndexMismatchError, retrieve
 from rag.store import VectorStore
 from rag.verify import extract_citations, verify_answer
@@ -406,6 +407,8 @@ def ask(req: AskRequest) -> dict:
         "explanation": ui.explain_grounding(
             report.grounding_score, config.VERIFY_MIN_GROUNDING, report.ok, lang=req.ui_lang
         ),
+        # null unless NLI_CHECK is on; reported beside `ok`, never changing it.
+        "nli": nli_summary(answer.text, retrieved),
     }
     return out
 

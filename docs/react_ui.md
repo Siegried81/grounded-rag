@@ -90,10 +90,13 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 - `sources[]`: `{sid, source, page, location, score, excerpt, excerpt_html, cited}`.
   `excerpt_html` is HTML-escaped server-side and only adds `<mark>` tags and
   `<a>` links on bare `http(s)` URLs (`target="_blank" rel="noopener noreferrer"`).
-- `verification`: `{ok, strict_ok, grounding_score, min_grounding, valid_citations,
-  invalid_citations, uncited_sentences, explanation}`. `strict_ok` also requires
-  that no claim-like sentence is left uncited. Verification runs outside the LLM
-  error handling: a failure there is a bug to surface, not a provider outage.
+- `verification`: `{ok, grounding_score, min_grounding, valid_citations,
+  invalid_citations, uncited_sentences, explanation, nli}`. Verification runs
+  outside the LLM error handling: a failure there is a bug to surface, not a
+  provider outage. `nli` is `null` unless `NLI_CHECK=true`; then it is `{model,
+  error, entailed_fraction, checked, contradicted[], sentences[]}` with, per cited
+  sentence, `{sentence, cited, label, entailment, contradiction, best_source}`. It
+  is reported beside `ok` and never changes it.
 - `latency`: `{retrieval_s, answer_s}`.
 - `error`: `null`, or `{kind: "embedding" | "llm" | "index", message, hint}`.
   `index` means the corpus was indexed with another embedding model than the
@@ -126,7 +129,9 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
   behind an "Open ... in full" panel under each source.
 - Bare `http(s)` URLs in a passage or a document are clickable. Only those two
   schemes are linked, so a passage cannot hand the reader a `javascript:` target.
-- A verification badge with its explanation, invalid citations and uncited claims.
+- A verification badge with its explanation, invalid citations and uncited claims,
+  and, when the NLI check is on, the share of cited sentences entailed by their
+  passage with the ones that are not (the badge stays the lexical verdict).
 - A refusal panel with the best score against the threshold and the closest passages.
 - An error banner with the actionable hint, latency chips and a loading state.
   A request that exceeds the client-side timeout is aborted and reported in the
@@ -140,7 +145,7 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 
 `tests/test_api.py` — **44 tests** — drives the API with FastAPI's `TestClient`.
 The index, embedder and LLM are replaced by fakes, so it makes no network calls
-and needs no key. It is part of the 339-test suite (`python -m pytest -q`).
+and needs no key. It is part of the 371-test suite (`python -m pytest -q`).
 
 The React side has no test runner: `web/src` is covered only by the API contract
 above and by hand. `markdown.jsx` is the one place that would matter most, and it
