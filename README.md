@@ -315,7 +315,10 @@ all HTTP mocked). The count printed at the end is the current one.
 - **Verification proves traceability, not truth** — `aa-03` above is a wrong answer
   with `verify_ok: true` and a valid citation.
 - **Grounding is lexical** (word overlap, not entailment); refusal detection is a
-  phrase heuristic that misses real refusals (`jb-01`).
+  phrase heuristic that misses real refusals (`jb-01`). An optional NLI check per
+  cited sentence (`NLI_CHECK=true`, off by default, `requirements-optional.txt`)
+  is reported beside the grounding score without changing it; it has not been run
+  on the evaluation sets, so no number here comes from it.
 - **The system prompt is extractable**: `leak-02` reproduced it verbatim.
 - **Small eval sets**: 23–25 retrieval / 40 answer / 21 red-team questions, written
   by one person (me) against the corpora — so they test the pipeline, not the

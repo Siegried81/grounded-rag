@@ -93,6 +93,13 @@ INCREMENTAL_INGEST = os.getenv("INCREMENTAL_INGEST", "false").lower() == "true"
 # check. It is a proxy, not entailment, so the bar is deliberately modest.
 VERIFY_MIN_GROUNDING = float(os.getenv("VERIFY_MIN_GROUNDING", "0.30"))
 QUERY_LOG_PATH = ROOT / "logs" / "queries.jsonl"
+# Optional NLI entailment check per cited sentence (rag/nli.py), reported next
+# to the lexical grounding score and never folded into it: `ok`, `strict_ok`
+# and `grounding_score` mean the same with it on or off. Off by default; needs
+# `sentence-transformers` (requirements-optional.txt) and downloads NLI_MODEL
+# (a 3-way contradiction/entailment/neutral cross-encoder) on first use.
+NLI_CHECK = os.getenv("NLI_CHECK", "false").lower() == "true"
+NLI_MODEL = os.getenv("NLI_MODEL", "cross-encoder/nli-deberta-v3-xsmall")
 
 # --- Answer language ---------------------------------------------------------
 # Language the UIs ask answers to be written in. "auto" adds nothing to the

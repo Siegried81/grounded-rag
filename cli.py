@@ -64,6 +64,7 @@ def cmd_ask(args) -> int:
     from rag.embed import get_embedder
     from rag.lexical import BM25Index
     from rag.logging_utils import log_query
+    from rag.nli import check_entailment, format_nli, get_checker
     from rag.retrieve import retrieve
     from rag.store import VectorStore
     from rag.verify import format_report, verify_answer
@@ -95,6 +96,9 @@ def cmd_ask(args) -> int:
             print(f"[S{i}] {loc} (score {src.score:.2f})")
         report = verify_answer(answer.text, answer.sources, min_grounding=config.VERIFY_MIN_GROUNDING)
         print("\n" + format_report(report))
+        checker = get_checker()  # None unless NLI_CHECK=true
+        if checker is not None:
+            print(format_nli(check_entailment(answer.text, answer.sources, checker)))
 
     top_score = retrieved[0].score if retrieved else None
     log_query(config.QUERY_LOG_PATH, question=question, corpus=args.corpus,

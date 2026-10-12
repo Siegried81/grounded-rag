@@ -6,6 +6,9 @@
 # VECTOR_INDEX=faiss: approximate dense search for large corpora (rag/ann.py).
 faiss-cpu>=1.8
 
-# RERANKER=cross_encoder: cross-encoder re-ranking of the candidate pool
-# (rag/rerank.py). Pulls in torch; the model downloads on first use.
+# Needed by two switches, each loading its own model on first use; pulls in
+# torch:
+# - RERANKER=cross_encoder: cross-encoder re-ranking of the candidate pool
+#   (rag/rerank.py).
+# - NLI_CHECK=true: NLI entailment per cited sentence (rag/nli.py).
 sentence-transformers>=3.0
