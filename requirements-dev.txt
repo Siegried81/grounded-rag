@@ -1,0 +1,4 @@
+# Development-only tools: never installed in the published Docker image.
+# debugpy: VS Code debugger, used by docker-compose.debug.yml (and locally:
+#   pip install -r requirements-dev.txt)
+debugpy>=1.8,<2
