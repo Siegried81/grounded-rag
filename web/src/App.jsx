@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ASK_TIMEOUT_MS, ask, getConfig, getCorpora } from "./api.js";
+import { ASK_TIMEOUT_MS, ask, askStream, getConfig, getCorpora } from "./api.js";
 import { useT } from "./i18n.js";
 import { Inline } from "./markdown.jsx";
 import Header from "./components/Header.jsx";
@@ -115,6 +115,14 @@ export default function App() {
       [c]: (h[c] || []).map((x) => (x.id === id ? { ...x, ...patch } : x)),
     }));
 
+  // Streamed text is appended through the updater form, so deltas arriving
+  // faster than React renders are never lost to a stale closure.
+  const appendPartial = (c, id, text) =>
+    setHistories((h) => ({
+      ...h,
+      [c]: (h[c] || []).map((x) => (x.id === id ? { ...x, partial: (x.partial || "") + text } : x)),
+    }));
+
   const send = useCallback(
     async (question) => {
       if (!corpus || busy) return;
@@ -130,11 +138,17 @@ export default function App() {
         [c]: [...(h[c] || []), { id, question, corpus: c, status: "loading", requestedLanguage }],
       }));
       setBusy(true);
+      const body = { corpus: c, question, ...settings, language: requestedLanguage };
       try {
-        const result = await ask(
-          { corpus: c, question, ...settings, language: requestedLanguage },
-          uiLang
-        );
+        // Streaming shows the passages, then the answer as it is written; the
+        // result it resolves with is the same body /api/ask returns, so the
+        // finished turn renders identically either way.
+        const result = config?.stream_answers
+          ? await askStream(body, uiLang, (ev) => {
+              if (ev.event === "sources") updateTurn(c, id, { streamSources: ev.data });
+              else if (ev.event === "delta") appendPartial(c, id, ev.data.text);
+            })
+          : await ask(body, uiLang);
         updateTurn(c, id, { status: "done", result });
         setFinished({ id, status: result.refused ? "refused" : "done" });
       } catch (e) {
@@ -150,7 +164,7 @@ export default function App() {
         setBusy(false);
       }
     },
-    [corpus, busy, settings, answerLang, uiLang, t]
+    [corpus, busy, settings, answerLang, uiLang, t, config]
   );
 
   const clear = () => setHistories((h) => ({ ...h, [corpus]: [] }));

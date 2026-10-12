@@ -19,7 +19,7 @@ import streamlit as st
 
 import config
 from rag import ui_helpers as ui
-from rag.answer import answer_question
+from rag.answer import answer_question, stream_answer
 from rag.embed import get_embedder
 from rag.ingest import document_paths, ensure_index, read_document
 from rag.lexical import BM25Index
@@ -300,13 +300,18 @@ def render_assistant(msg: dict) -> None:
     st.caption(timing)
 
 
-def run_question(question: str, store, bm25, embedder, settings: dict) -> dict:
+def run_question(question: str, store, bm25, embedder, settings: dict, on_delta=None) -> dict:
     """Retrieve, answer and verify one question; turn failures into messages.
 
     Retrieval and generation are timed separately because they fail and slow down
     for different reasons (embedding backend vs LLM provider). On refusal the
     closest passages are fetched with a plain dense search so the user sees what
     was found and how far below the threshold it was.
+
+    With `on_delta`, the answer is streamed: each piece of raw model text is
+    passed to it as it arrives, for display. The returned message is the same as
+    without it, because the answer kept and verified is the complete text,
+    normalised once the stream has ended (see answer.stream_answer).
     """
     msg = {"role": "assistant", "question": question, "refused": False, "text": "",
            "sources": [], "closest": [], "report": None, "t_answer": None}
@@ -335,7 +340,14 @@ def run_question(question: str, store, bm25, embedder, settings: dict) -> dict:
     msg["sources"] = retrieved
     t1 = time.perf_counter()
     try:
-        answer = answer_question(question, retrieved, language=settings["language"])
+        if on_delta is None:
+            answer = answer_question(question, retrieved, language=settings["language"])
+        else:
+            for kind, value in stream_answer(question, retrieved, language=settings["language"]):
+                if kind == "delta":
+                    on_delta(value)
+                else:
+                    answer = value
     except Exception as exc:  # LLMError or any provider failure: still show the passages
         msg["llm_error"] = ui.llm_error_hint(str(exc), config.LLM_PROVIDER)
         msg["t_answer"] = time.perf_counter() - t1
@@ -414,8 +426,19 @@ def main() -> None:
         with st.chat_message("user"):
             st.markdown(question)
         with st.chat_message("assistant"):
+            # Streamed text is shown as plain Markdown, without the citation
+            # badges: a marker can be split across pieces, so badges, sources
+            # and the verification report are rendered once the answer is whole.
+            live, parts = st.empty(), []
+
+            def show(delta: str) -> None:
+                parts.append(delta)
+                live.markdown("".join(parts) + " ▌")
+
             with st.spinner("Retrieving passages and drafting a cited answer..."):
-                msg = run_question(question, store, bm25, embedder, settings)
+                msg = run_question(question, store, bm25, embedder, settings,
+                                   on_delta=show if config.STREAM_ANSWERS else None)
+            live.empty()
             history.append(msg)
             render_assistant(msg)
 
