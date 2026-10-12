@@ -8,6 +8,7 @@ the lexical verification and never changes `ok`, and failures are reported
 rather than raised.
 """
 
+import json
 import math
 import sys
 
@@ -161,3 +162,23 @@ def test_api_reports_nli_beside_verification_without_changing_ok(setup, client, 
     assert on["nli"]["checked"] == 1 and on["nli"]["entailed_fraction"] == 0.0
     assert on["nli"]["sentences"][0]["label"] == "contradiction"
     assert {k: v for k, v in on.items() if k != "nli"} == {k: v for k, v in off.items() if k != "nli"}
+
+
+def test_stream_endpoint_reports_the_same_nli_as_ask(setup, client, monkeypatch):
+    """`/api/ask/stream` builds its final body with the same code as `/api/ask`,
+    so with the check on its `done` event carries the same `verification.nli`."""
+    text = "High-risk systems must keep logs and documentation [S1]."
+    monkeypatch.setattr(rag.llm, "complete", lambda prompt, system=None: text)
+    monkeypatch.setattr(rag.llm, "stream", lambda prompt, system=None: iter([text[:20], text[20:]]))
+    monkeypatch.setattr(config, "NLI_CHECK", True)
+    monkeypatch.setattr(nli, "get_checker", lambda: FakeChecker({}, default=("contradiction", 0.9)))
+    req = {"corpus": "demo", "question": "What must high-risk systems keep?"}
+
+    resp = client.post("/api/ask/stream", json=req)
+    assert resp.status_code == 200
+    done = [b for b in resp.text.split("\n\n") if b.startswith("event: done")]
+    assert len(done) == 1
+    streamed = json.loads(done[0].split("data: ", 1)[1])["verification"]["nli"]
+    whole = client.post("/api/ask", json=req).json()["verification"]["nli"]
+    assert streamed == whole
+    assert streamed["checked"] == 1 and streamed["sentences"][0]["label"] == "contradiction"
