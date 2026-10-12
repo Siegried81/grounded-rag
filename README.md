@@ -205,6 +205,7 @@ ollama pull nomic-embed-text          # local embeddings (the default EMBED_PROV
 ollama pull llama3.2:3b               # only needed for the Ollama generation fallback
 
 python cli.py ingest --corpus ai_act_sections
+python cli.py ingest --incremental --corpus ai_act_sections  # later: only new/changed files
 python cli.py ask --corpus ai_act_sections "What are the obligations for high-risk AI systems?"
 ```
 
@@ -280,7 +281,7 @@ With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **361 passing**, the whole suite offline (fake embedder,
+`python -m pytest -q` — **371 passing**, the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations

@@ -60,6 +60,13 @@ MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.6"))
 # original fixed-character splitter, kept as a fallback.
 CHUNKER = os.getenv("CHUNKER", "smart")  # smart | char
 USE_EMBED_CACHE = os.getenv("USE_EMBED_CACHE", "true").lower() == "true"
+# Incremental ingest: a file whose sha256 matches the last build's manifest
+# keeps its chunks and vectors instead of being re-read, re-chunked and
+# re-embedded; removed files are dropped. It writes the index a full build would
+# (see rag/ingest.py), but stays off by default so the published indexes keep
+# being built the way they were measured. `cli.py ingest --incremental` turns it
+# on for one run.
+INCREMENTAL_INGEST = os.getenv("INCREMENTAL_INGEST", "false").lower() == "true"
 
 # --- Verification & logging --------------------------------------------------
 # Minimum lexical grounding for an answer to pass the (cheap, offline) faithfulness
