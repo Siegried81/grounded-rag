@@ -17,6 +17,7 @@ Run with `uvicorn api.main:app --port 8002`. When `web/dist` exists (after
 
 from __future__ import annotations
 
+import json
 import logging
 import time
 from functools import lru_cache
@@ -24,12 +25,13 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 import config
 from rag import ui_helpers as ui
-from rag.answer import answer_question
+from rag.answer import answer_question, stream_answer
 from rag.embed import get_embedder
 from rag.ingest import document_paths, read_document
 from rag.lexical import BM25Index
@@ -206,6 +208,7 @@ def get_config(
         "refusal_threshold": config.SCORE_THRESHOLD,
         "min_grounding": config.VERIFY_MIN_GROUNDING,
         "llm_key_configured": llm_key_configured(),
+        "stream_answers": config.STREAM_ANSWERS,
         "pipeline_steps": ui.pipeline_steps(ui_lang),
         "limitations": ui.build_limitations(
             config.SCORE_THRESHOLD, config.VERIFY_MIN_GROUNDING, has_bm25, lang=ui_lang
@@ -308,15 +311,13 @@ class AskRequest(BaseModel):
         return v
 
 
-@app.post("/api/ask")
-def ask(req: AskRequest) -> dict:
-    """Retrieve, answer and verify one question, mirroring app.py's `run_question`.
+def _retrieve_step(req: AskRequest):
+    """Retrieve for one request; return (out, retrieved, language).
 
-    Retrieval and generation are timed separately because they fail and slow
-    down for different reasons. On refusal the closest passages come from a plain
-    dense search so the user sees what was found and how far below the threshold
-    it was. Hybrid falls back to dense when the corpus has no BM25 index, which is
-    the only mode app.py would offer for it.
+    `out` is the response body every /api/ask variant returns. When retrieval
+    failed or the gate refused, `out` is already complete and `retrieved` is
+    None: there is nothing for the model to answer from. Shared by `ask` and
+    `ask_stream` so the two cannot drift apart on what a refusal or an error is.
     """
     _require_corpus(req.corpus)
     store, bm25, embedder = load_resources(req.corpus)
@@ -349,7 +350,7 @@ def ask(req: AskRequest) -> dict:
     except IndexMismatchError as exc:  # the index needs re-ingesting, not a running backend
         out["latency"]["retrieval_s"] = round(time.perf_counter() - t0, 3)
         out["error"] = {"kind": "index", "message": "This corpus must be re-indexed.", "hint": str(exc)}
-        return out
+        return out, None, language
     except Exception:  # embedding backend down or misconfigured
         log.exception("retrieval failed")
         out["latency"]["retrieval_s"] = round(time.perf_counter() - t0, 3)
@@ -358,7 +359,7 @@ def ask(req: AskRequest) -> dict:
             "message": "The question could not be embedded, so no passages were retrieved.",
             "hint": ui.embed_error_hint(config.EMBED_PROVIDER),
         }
-        return out
+        return out, None, language
     out["latency"]["retrieval_s"] = round(time.perf_counter() - t0, 3)
 
     if not retrieved:
@@ -374,28 +375,34 @@ def ask(req: AskRequest) -> dict:
             "explanation": ui.explain_refusal(best, config.SCORE_THRESHOLD, lang=req.ui_lang),
             "closest": _sources(closest, question, []),
         }
-        return out
+        return out, None, language
+    return out, retrieved, language
 
-    t1 = time.perf_counter()
-    try:
-        answer = answer_question(question, retrieved, language=language)
-    except Exception as exc:  # LLMError or any provider failure: still show the passages
-        log.warning("answer step failed: %s", exc)
-        out["latency"]["answer_s"] = round(time.perf_counter() - t1, 3)
-        out["sources"] = _sources(retrieved, question, [])
-        out["error"] = {
-            "kind": "llm",
-            "message": "No language model could be reached.",
-            "hint": ui.llm_error_hint(str(exc), config.LLM_PROVIDER),
-        }
-        return out
-    out["latency"]["answer_s"] = round(time.perf_counter() - t1, 3)
-    # Outside the try above: verification is offline code, so a failure here is a
-    # bug to surface, not a provider outage to explain with an API-key hint.
-    report = verify_answer(answer.text, retrieved, min_grounding=config.VERIFY_MIN_GROUNDING)
 
-    out["answer"] = answer.text
-    out["sources"] = _sources(retrieved, question, extract_citations(answer.text))
+def _llm_failed(out: dict, req: AskRequest, retrieved, exc: Exception, elapsed: float) -> dict:
+    """Fill `out` for a generation failure: the passages, and a hint naming the setting to fix."""
+    log.warning("answer step failed: %s", exc)
+    out["latency"]["answer_s"] = round(elapsed, 3)
+    out["sources"] = _sources(retrieved, req.question, [])
+    out["error"] = {
+        "kind": "llm",
+        "message": "No language model could be reached.",
+        "hint": ui.llm_error_hint(str(exc), config.LLM_PROVIDER),
+    }
+    return out
+
+
+def _answered(out: dict, req: AskRequest, retrieved, text: str, elapsed: float) -> dict:
+    """Fill `out` with a finished answer, its sources and its verification report.
+
+    Verification is offline code, so the callers run this outside their
+    provider-failure handling: a failure here is a bug to surface, not a
+    provider outage to explain with an API-key hint.
+    """
+    out["latency"]["answer_s"] = round(elapsed, 3)
+    report = verify_answer(text, retrieved, min_grounding=config.VERIFY_MIN_GROUNDING)
+    out["answer"] = text
+    out["sources"] = _sources(retrieved, req.question, extract_citations(text))
     out["verification"] = {
         "ok": report.ok,
         "grounding_score": round(report.grounding_score, 4),
@@ -408,6 +415,78 @@ def ask(req: AskRequest) -> dict:
         ),
     }
     return out
+
+
+@app.post("/api/ask")
+def ask(req: AskRequest) -> dict:
+    """Retrieve, answer and verify one question, mirroring app.py's `run_question`.
+
+    Retrieval and generation are timed separately because they fail and slow
+    down for different reasons. On refusal the closest passages come from a plain
+    dense search so the user sees what was found and how far below the threshold
+    it was. Hybrid falls back to dense when the corpus has no BM25 index, which is
+    the only mode app.py would offer for it.
+    """
+    out, retrieved, language = _retrieve_step(req)
+    if retrieved is None:
+        return out
+    t1 = time.perf_counter()
+    try:
+        answer = answer_question(req.question, retrieved, language=language)
+    except Exception as exc:  # LLMError or any provider failure: still show the passages
+        return _llm_failed(out, req, retrieved, exc, time.perf_counter() - t1)
+    return _answered(out, req, retrieved, answer.text, time.perf_counter() - t1)
+
+
+def _sse(event: str, data) -> str:
+    """One server-sent event: a named event with a single-line JSON payload."""
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@app.post("/api/ask/stream")
+def ask_stream(req: AskRequest) -> StreamingResponse:
+    """Same as /api/ask, delivered as server-sent events while the model writes.
+
+    Events, in order:
+    - `sources`: the retrieved passages (none cited yet), so the reader can
+      start reading them before the answer exists; skipped on refusal or error;
+    - `delta` (zero or more): `{"text": ...}`, raw model text as it arrives;
+    - `done`: exactly the body /api/ask would have returned for this request.
+
+    The deltas are for display only. Citations are normalised and the answer is
+    verified once, on the complete text, so `done` carries the same answer, the
+    same verification and the same sources as the non-streamed endpoint; a
+    client should replace what it streamed with `done.answer`. Validation (422)
+    and an unknown corpus (404) fail before the stream starts, as for /api/ask.
+    """
+    _require_corpus(req.corpus)
+
+    def events():
+        out, retrieved, language = _retrieve_step(req)
+        if retrieved is None:
+            yield _sse("done", out)
+            return
+        yield _sse("sources", _sources(retrieved, req.question, []))
+        t1 = time.perf_counter()
+        answer = None
+        try:
+            for kind, value in stream_answer(req.question, retrieved, language=language):
+                if kind == "delta":
+                    yield _sse("delta", {"text": value})
+                else:
+                    answer = value
+        except Exception as exc:  # LLMError or any provider failure: still show the passages
+            yield _sse("done", _llm_failed(out, req, retrieved, exc, time.perf_counter() - t1))
+            return
+        yield _sse("done", _answered(out, req, retrieved, answer.text, time.perf_counter() - t1))
+
+    # no-cache and X-Accel-Buffering stop a reverse proxy from holding the
+    # events back until the response is complete, which would undo the stream.
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # Single-process production mode: serve the built React app from "/". Mounted

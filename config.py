@@ -87,6 +87,16 @@ if DEFAULT_ANSWER_LANGUAGE not in SUPPORTED_ANSWER_LANGUAGES:
 # Languages the interface texts (examples, explanations, limitations) exist in.
 SUPPORTED_UI_LANGUAGES = ("en", "fr")
 
+# --- Answer streaming --------------------------------------------------------
+# Whether the Streamlit and React UIs show the answer while the model writes it
+# (server-sent events from POST /api/ask/stream). It changes when the text
+# appears, not what it says: the request, the LLM cache entry, citation
+# normalisation and verification are the same as without streaming, and
+# verification runs once the stream is complete. "false" restores the
+# wait-for-the-whole-answer behaviour, e.g. behind a proxy that buffers events.
+# The CLI streams only with `ask --stream`, so its default output is unchanged.
+STREAM_ANSWERS = os.getenv("STREAM_ANSWERS", "true").lower() == "true"
+
 # --- Embedding backend -------------------------------------------------------
 EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "ollama")
 # ollama | hosted | sentence_transformers | fake
