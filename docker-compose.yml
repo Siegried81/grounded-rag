@@ -9,7 +9,9 @@
 
 x-app-common: &app-common
   build: .
-  image: grounded-rag:latest
+  # build + image: `docker compose up --build` builds from source and tags it with the
+  # Docker Hub name; `docker compose pull` downloads the published image instead.
+  image: ${DOCKERHUB_USERNAME:-siegried}/grounded-rag:latest
   # Secrets and provider settings come from .env, never from the image. The file
   # is optional so `docker compose config` and a key-less demo still work.
   env_file:
