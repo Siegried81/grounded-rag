@@ -54,6 +54,16 @@ CANDIDATE_K = int(os.getenv("CANDIDATE_K", "20"))
 # passages; lambda 1.0 is pure relevance, 0.0 pure diversity.
 USE_MMR = os.getenv("USE_MMR", "true").lower() == "true"
 MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.6"))
+# Dense search backend. "numpy" (default) is the exact brute-force product every
+# published number was measured with. "faiss" proposes candidates from an
+# approximate HNSW graph (rag/ann.py) for corpora far larger than the shipped
+# ones; scores are still exact cosines, but a passage the graph misses is
+# missing, so recall can drop. Needs `faiss-cpu` (requirements-optional.txt).
+VECTOR_INDEX = os.getenv("VECTOR_INDEX", "numpy").strip().lower()
+if VECTOR_INDEX not in ("numpy", "faiss"):
+    raise ValueError(f"VECTOR_INDEX must be 'numpy' or 'faiss', got {VECTOR_INDEX!r}")
+# HNSW search beam: higher is slower and closer to exact.
+FAISS_EF_SEARCH = int(os.getenv("FAISS_EF_SEARCH", "64"))
 
 # --- Chunking / ingestion ----------------------------------------------------
 # "smart" packs whole sentences (better passages & citations); "char" is the
