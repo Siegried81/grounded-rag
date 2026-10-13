@@ -2,6 +2,10 @@
 __pycache__/
 *.pyc
 .env
+# Any env variant (.env.local, .env.prod...) may hold secrets; only the
+# placeholder template is tracked.
+.env.*
+!.env.example
 index/
 logs/
 .pytest_cache/
