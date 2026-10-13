@@ -41,7 +41,8 @@ the raw SEC submission and is not meant to be ingested on its own.
 
 ## 3. Run the app
 
-Open http://localhost:8501 once the container is healthy.
+Open http://localhost:8502 once the container is healthy (8501 inside the container;
+`UI_PORT` in `.env` changes the host side).
 
 **Hosted LLM (Groq / OpenRouter), embeddings from Ollama on your host**
 
