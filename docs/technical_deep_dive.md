@@ -1110,7 +1110,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**416 tests, all offline: 415 passing and 1 skipped without `faiss-cpu`, 416 passing with it.** The whole suite runs with:
+**419 tests, all offline: 418 passing and 1 skipped without `faiss-cpu`, 419 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider

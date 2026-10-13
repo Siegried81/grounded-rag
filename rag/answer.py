@@ -8,6 +8,7 @@ safest way to avoid an ungrounded answer is to never give the model the chance.
 from __future__ import annotations
 
 import re
+import unicodedata
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -66,7 +67,38 @@ class Answer:
 
 # Matches an opening or closing <source> tag inside passage text, so a document
 # cannot close its own fence early and pass the rest off as prompt text.
-_FENCE_TAG_RE = re.compile(r"<(/?)(source)", re.IGNORECASE)
+# Whitespace is allowed inside the tag ("< /source>") because some models read
+# it as a tag anyway. The regex runs on an NFKC-folded copy of the text (see
+# `_neutralise_tags`), so look-alikes such as fullwidth "＜/ｓｏｕｒｃｅ＞" match too.
+_FENCE_TAG_RE = re.compile(r"<\s*(/?)\s*(source)", re.IGNORECASE)
+# Longest filename printed in a "[S#] (file)" label; longer ones are cut so a
+# filename cannot smuggle a whole paragraph of instructions into the prompt.
+_LABEL_MAX = 200
+
+
+def _neutralise_tags(text: str) -> str:
+    """Rewrite every <source>/</source> look-alike in `text` to inert "&lt;source".
+
+    Detection runs on an NFKC-folded copy, character by character, with a map back
+    to the original offsets. Only the matched tag spans are replaced: the rest of
+    the text stays byte-for-byte as indexed, so quotes the model copies still match
+    the chunk during verification and the prompt cache keys do not change.
+    """
+    folded: list[str] = []
+    origin: list[int] = []  # origin[k] = index in `text` of folded char k
+    for i, ch in enumerate(text):
+        for f in unicodedata.normalize("NFKC", ch):
+            folded.append(f)
+            origin.append(i)
+    folded_text = "".join(folded)
+    out, last = [], 0
+    for m in _FENCE_TAG_RE.finditer(folded_text):
+        start, end = origin[m.start()], origin[m.end() - 1] + 1
+        out.append(text[last:start])
+        out.append(f"&lt;{m.group(1)}{m.group(2)}")
+        last = end
+    out.append(text[last:])
+    return "".join(out)
 
 
 def _fence(index: int, text: str) -> str:
@@ -75,21 +107,37 @@ def _fence(index: int, text: str) -> str:
     Retrieved text is untrusted: an indexed document can say "ignore previous
     instructions". The fence, with the matching system-prompt sentence, tells the
     model where quoted data starts and ends. Any <source>/</source> inside the
-    passage is rewritten to &lt;source so it cannot terminate the fence.
+    passage (including spaced or fullwidth variants) is rewritten to &lt;source so
+    it cannot terminate the fence.
     """
-    safe = _FENCE_TAG_RE.sub(r"&lt;\1\2", text)
-    return f'<source id="S{index}">\n{safe}\n</source>'
+    return f'<source id="S{index}">\n{_neutralise_tags(text)}\n</source>'
+
+
+def _safe_label(source: str) -> str:
+    """Make a source filename safe to print in the "[S#] (file)" label.
+
+    The label sits OUTSIDE the fence, so a filename is as untrusted as the passage
+    and could otherwise carry an injection ("x.pdf)\nSYSTEM: ..." or "</source>").
+    We neutralise fence tags, replace control/line-break characters with a space
+    so the label stays on one line, and cap its length. Ordinary names are unchanged.
+    """
+    flat = "".join(
+        " " if unicodedata.category(c)[0] == "C" or unicodedata.category(c) in ("Zl", "Zp") else c
+        for c in source
+    )
+    return _neutralise_tags(flat)[:_LABEL_MAX]
 
 
 def _build_prompt(question: str, retrieved: list[Retrieved]) -> str:
     """Format numbered, source-labelled context blocks followed by the question.
 
     Each passage keeps its "[S#] (file)" label, so citation numbering is unchanged,
-    but its text now sits inside an untrusted-data fence (see `_fence`). This
+    but its text now sits inside an untrusted-data fence (see `_fence`) and the
+    filename is sanitised (see `_safe_label`). This
     changes what the model sees, not how answers are cited or verified.
     """
     blocks = [
-        f"[S{i}] ({r.chunk.source})\n{_fence(i, r.chunk.text)}"
+        f"[S{i}] ({_safe_label(r.chunk.source)})\n{_fence(i, r.chunk.text)}"
         for i, r in enumerate(retrieved, 1)
     ]
     return "Sources:\n\n" + "\n\n".join(blocks) + f"\n\nQuestion: {question}"
