@@ -38,7 +38,9 @@ services:
   app:
     <<: *app-common
     ports:
-      - "8501:8501"
+      # Host port: each app has its own, so all of them can run at once.
+      # Override with UI_PORT in .env; the app still listens on 8501 inside.
+      - "${UI_PORT:-8502}:8501"
     restart: unless-stopped
     depends_on:
       ollama:

@@ -1094,7 +1094,7 @@ itself, so `OLLAMA_URL` is overridden to the bundled `ollama` service, or to
 
 | Service | Profile | Purpose |
 |---|---|---|
-| `app` | (default) | Streamlit on 8501 |
+| `app` | (default) | Streamlit, published on host port 8502 |
 | `ollama` | `local-llm` | bundled Ollama for embeddings and/or generation; models in a named volume, not published on the host |
 | `ingest` | `tools` | one-shot `python cli.py ingest --corpus …`, then exits |
 | `api` | `api` | FastAPI (+ built React UI) on 8002, with its own healthcheck on `/api/health` |

@@ -241,7 +241,7 @@ the second terminal as a normal login shell and check that `which npm` points
 under `~/.nvm` before `npm install`.
 
 **Streamlit**: `python -m streamlit run app.py` (port 8501) · **Docker**:
-`docker compose up --build` (Streamlit on :8501) or
+`docker compose up --build` (Streamlit on :8502) or
 `docker compose --profile api up --build` (API + built React UI on :8002);
 see [docs/docker.md](docs/docker.md) for the bundled Ollama. **Render**:
 `render.yaml` deploys the same image with a hosted embedder
