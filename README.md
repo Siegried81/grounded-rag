@@ -92,7 +92,7 @@ runs, the same sets give recall@5 0.978 / MRR 0.746 and recall@5 0.960 / MRR
 
 The AI Act MRR fell from 0.884 to 0.746 and that is the point: the old score was
 measured over four documents, where almost any retrieval lands on the right one.
-Over 308 — one per recital, article and annex — MRR is a real routing test.
+Over 308 — one per recital, article and annex, plus the title and the closing part — MRR is a real routing test.
 
 **Phrasings** (`scripts/run_phrasing_eval.py`, k = 5, 8 questions × 3 wordings):
 `hit@5` is 8/8 `original`, 7/8 `casual`, **3/8 `other_language`**, and phrasing

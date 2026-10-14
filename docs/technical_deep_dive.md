@@ -474,7 +474,8 @@ Relevance is judged at the **source level**: a retrieved chunk counts if its
 - `MRR` — mean of `1/rank` of the first relevant result (0 if none in the top k).
 
 The two sets are `eval/ai_act_sections_eval.jsonl` (23 questions over the 308
-files of Regulation (EU) 2024/1689 — one per recital, article and annex) and
+files of Regulation (EU) 2024/1689 — one per recital, article and annex, plus the
+title and the closing part) and
 `eval/filings_sections_eval.jsonl` (25 questions over 6 Item sections of Apple's
 FY2025 10-K), where each question is labelled with the section(s) that answer it.
 A question is labelled with the operative article, plus the one recital that
