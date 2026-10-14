@@ -162,7 +162,7 @@ passages. `GET /api/config` reports `stream_answers` (`STREAM_ANSWERS`, default
 `tests/test_api.py` — **45 tests** — drives the API with FastAPI's `TestClient`.
 The index, embedder and LLM are replaced by fakes, so it makes no network calls
 and needs no key. `tests/test_streaming.py` covers `/api/ask/stream` the same
-way. Both are part of the 419-test suite (`python -m pytest -q`; 1 of them
+way. Both are part of the 430-test suite (`python -m pytest -q`; 1 of them
 skips without `faiss-cpu`).
 
 The React side has no test runner: `web/src` is covered only by the API contract
