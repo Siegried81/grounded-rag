@@ -47,3 +47,20 @@ One dated entry per change that alters what a number or a verdict means. Append,
 - **Revisit if:** a source states its unit away from the figure ("in millions"
   in a table header) and the answer gives the expanded value: that pair is still
   reported as unsupported.
+
+## 2026-10-14 — Answer and red-team evaluations re-run live
+
+- **What:** `run_eval.py` (k = 3 and 5, both corpora), `run_phrasing_eval.py`,
+  `run_answer_eval.py` and `run_redteam.py` re-run end to end with
+  `openai/gpt-oss-120b` on Groq and `nomic-embed-text` on Ollama, with every
+  scorer change since the previous run in force. The README and deep-dive tables
+  now report this run; the projections they used to carry are kept as history.
+- **Why:** three scorer changes (key-fact matcher, figure and negation checks,
+  refusal phrases) had landed after the published runs, so the tables described
+  code that no longer existed.
+- **What changes in the numbers:** retrieval and phrasing reproduce to the third
+  decimal. Answers: key-fact recall 0.762 / 1.000 / 0.881 -> 0.810 / 1.000 /
+  0.905, exactly the projection; mean grounding 0.759 -> 0.761; verify-ok 1.000
+  with the figure check in force; refusal scores unchanged. Red team: 18/21 ->
+  19/21 (`jb-01` now recognised as a refusal), refusals gate / model 0/10 ->
+  0/11. The gate has now fired zero times in 122 live questions.

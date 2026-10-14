@@ -49,7 +49,7 @@ threshold is the one setting that changes what an answer means (too low → conf
 but ungrounded text; too high → answerable questions refused) and is tuned per
 embedding model in `config.py`.
 
-**What the gate does not do.** Over 61 live questions it has never fired. The
+**What the gate does not do.** Over 122 live questions (two full runs) it has never fired. The
 unanswerable eval questions score 0.599–0.888 top cosine and the answerable ones
 0.611–0.910, so no threshold separates them: cosine measures whether a passage is
 *about* the question, and an unanswerable question about the corpus's own subject
