@@ -11,7 +11,7 @@ limitation — is in [`technical_deep_dive.md`](technical_deep_dive.md).
    passages (`chunk.py` is a fixed-character fallback). PDFs are chunked page by
    page so a citation can name a page. Each `Chunk` records its source and ordinal.
 2. **Embed** (`rag/embed.py` + `rag/cache.py`): chunk texts become vectors via an
-   `Embedder` (Ollama / hosted / fake). An on-disk cache means unchanged passages
+   `Embedder` (Ollama / hosted / in-process sentence-transformers / fake). An on-disk cache means unchanged passages
    are never re-embedded.
 3. **Index**: vectors go into a NumPy cosine store (`rag/store.py`) and a BM25
    keyword index (`rag/lexical.py`), both saved under `index/<corpus>`.
@@ -27,8 +27,9 @@ limitation — is in [`technical_deep_dive.md`](technical_deep_dive.md).
    them and cite `[S1]`, `[S2]`, … Alternative markers some models emit (`【S1】`)
    are normalised to `[S1]`. The LLM client rotates Groq keys, waits for an
    announced rate-limit reset, falls back across providers and caches responses.
-6. **Verify** (`rag/verify.py`): every `[S#]` is checked to be real and a lexical
-   grounding score is computed, on every answer.
+6. **Verify** (`rag/verify.py`): every `[S#]` is checked to be real, a lexical
+   grounding score is computed, and every figure a cited sentence states must
+   appear in the sources it cites, on every answer.
 
 **Evaluation (`scripts/`)**: four suites — retrieval metrics (`run_eval.py`,
 scored by `rag/metrics.py`), answer-level metrics (`run_answer_eval.py`,
@@ -58,8 +59,8 @@ next to every refusal metric, so a refusal score is never read as evidence about
 the threshold.
 
 **And what verification does not do.** `rag/verify.py` checks that a citation
-exists, points inside the retrieved set, and shares vocabulary with the answer —
-none of which is a check on truth. The worked example is `aa-03`, in
+exists, points inside the retrieved set, shares vocabulary with the answer, and
+carries every figure the sentence states — none of which is a check on truth. The worked example is `aa-03`, in
 [`technical_deep_dive.md`](technical_deep_dive.md) §8.2: a fine quoted correctly
 from the wrong article's scope, `verify_ok: true`. Read it
 before trusting a green verification badge; it is why a source card's filename

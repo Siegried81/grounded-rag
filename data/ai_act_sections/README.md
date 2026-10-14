@@ -32,8 +32,9 @@ evaluation meaningful — each eval question is labelled with the one or two fil
 that answer it, so `recall@k` and `MRR` measure whether retrieval routes to the
 right article rather than saturating at 1.0 on a single blob. Each article file
 repeats its chapter heading on the first line so the opening chunk carries that
-context; the regulation number itself appears only in `01_title_and_citations.txt`,
-so a question about it has exactly one answering file.
+context; the regulation states its own number as its title only in
+`01_title_and_citations.txt` (Articles 102–110 repeat it inside the amendments
+they make to other acts), so a question about it is labelled with that one file.
 
 Annex files are numbered `01`-`13` rather than by Roman numeral because
 `annex_ix` sorts before `annex_v`.
