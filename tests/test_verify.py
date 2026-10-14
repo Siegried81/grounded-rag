@@ -215,6 +215,51 @@ def test_figures_present_in_the_cited_source_pass_whatever_the_separators():
     assert r.ok
 
 
+def test_a_whole_number_keeps_its_trailing_zeros():
+    """240 is not 24 and 10 is not 1,000: only a decimal part loses its zeros."""
+    for wrong in ("within 240 hours", "up to 10 euros", "up to 100 euros"):
+        r = verify_answer(f"The seller must respond {wrong} [S1].", NUMERIC_SOURCES)
+        assert r.unsupported_numbers, wrong
+        assert not r.ok
+
+
+def test_a_decimal_still_matches_its_shorter_spelling():
+    sources = [_src("Revenue rose by 2.50 percent over the fiscal year.", 1)]
+    r = verify_answer("Revenue rose by 2.5 percent over the fiscal year [S1].", sources)
+    assert r.unsupported_numbers == []
+
+
+@pytest.mark.parametrize("sep", [" ", " ", " ", ","])
+def test_thousands_separated_by_any_space_read_as_one_figure(sep):
+    """EUR-Lex writes 35 000 000 with a narrow no-break space (U+202F)."""
+    sources = [_src(f"Fines of up to EUR 35{sep}000{sep}000 may be imposed on operators.", 1)]
+    r = verify_answer("Fines of up to EUR 35000000 may be imposed on operators [S1].", sources)
+    assert r.unsupported_numbers == []
+    r = verify_answer("Fines of up to EUR 35 may be imposed on operators [S1].", sources)
+    assert r.unsupported_numbers == ["35"]
+
+
+@pytest.mark.parametrize("answer_figure", ["EUR 15 million", "EUR 15 million", "EUR 15 000 000"])
+def test_a_scale_word_matches_the_spelled_out_figure(answer_figure):
+    """aa-04: the answer says "15 million", Article 99 says "15 000 000"."""
+    sources = [_src("Fines of up to EUR 15 000 000 may be imposed on operators.", 1)]
+    r = verify_answer(f"Fines of up to {answer_figure} may be imposed on operators [S1].", sources)
+    assert r.unsupported_numbers == []
+
+
+def test_a_wrong_scale_is_still_caught():
+    sources = [_src("Fines of up to EUR 15 000 000 may be imposed on operators.", 1)]
+    r = verify_answer("Fines of up to EUR 15 billion may be imposed on operators [S1].", sources)
+    assert r.unsupported_numbers == ["15000000000"]
+
+
+def test_a_scaled_figure_matches_a_table_stated_in_that_unit():
+    """fs-12: "$416,161 million" against a 10-K table in millions ("416,161")."""
+    sources = [_src("Total net sales were $ 416,161 and $ 391,035 (in millions).", 1)]
+    r = verify_answer("Net sales reached $416,161 million, up from $391,035 million [S1].", sources)
+    assert r.unsupported_numbers == []
+
+
 def test_a_figure_is_checked_against_the_sentence_s_own_citation_not_the_union():
     """24 is in S1; a sentence that attaches it to S2 is still wrong."""
     r = verify_answer("Article 5 applies after 24 hours [S2].", NUMERIC_SOURCES)
