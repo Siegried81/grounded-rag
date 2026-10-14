@@ -26,3 +26,24 @@ One dated entry per change that alters what a number or a verdict means. Append,
 - **Revisit if:** an answer legitimately derives a figure (a sum, a conversion)
   from its sources — it will be flagged; the fix is to cite the figures it was
   derived from, or to exempt derived figures explicitly.
+
+## 2026-10-14 — Figure check: whole numbers keep their zeros, scale words and no-break spaces understood
+
+- **What:** `verify._numbers` stripped trailing zeros from every figure, not just
+  from decimals, so "35 000 000" read as "35", "1,000" as "1" and "240 hours" as
+  "24 hours". Only a decimal part is trimmed now ("2.50" = "2.5"). The thousands
+  separator set adds U+00A0 and U+202F, the no-break spaces EUR-Lex and gpt-oss
+  use. A figure followed by a scale word (million, billion, milliard, miljoen…)
+  is supported by either its expanded value ("15 million" = Article 99's
+  "15 000 000") or its written value ("$416,161 million" = a 10-K table in
+  millions).
+- **Why:** the zero stripping let a wrong figure pass (an answer saying 240 hours
+  against a source saying 24 was "supported"), and the missing separators made a
+  correct figure fail (aa-03's spurious "0").
+- **What changes in the numbers:** re-verifying the 40 stored answers that carry
+  sources (`logs/answer_eval_results.jsonl`, `logs/redteam_results.jsonl`, full
+  source files) changes one verdict: aa-03 goes back to `ok`, its spurious "0"
+  gone. No published table is re-run here. Tests 418 → 429 passing.
+- **Revisit if:** a source states its unit away from the figure ("in millions"
+  in a table header) and the answer gives the expanded value: that pair is still
+  reported as unsupported.

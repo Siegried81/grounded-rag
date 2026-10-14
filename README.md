@@ -296,7 +296,7 @@ With Ollama for both, everything runs offline and free.
 
 ## Tests
 
-`python -m pytest -q` — **418 passing** (plus 1 skipped without `faiss-cpu`; 419 with it), the whole suite offline (fake embedder,
+`python -m pytest -q` — **429 passing** (plus 1 skipped without `faiss-cpu`; 430 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations
