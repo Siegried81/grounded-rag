@@ -34,6 +34,6 @@ Where to get a filing (all public, free):
   ```
 
 Splitting one filing into its Item sections is what makes retrieval evaluation
-meaningful: each eval question is labelled with the single section that answers
-it, so `recall@k` / `MRR` measure whether retrieval routes to the right section
+meaningful: each eval question is labelled with the section that answers it (two
+for the one question both answer), so `recall@k` / `MRR` measure whether retrieval routes to the right section
 rather than saturating at 1.0 on a single blob.

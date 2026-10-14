@@ -118,8 +118,9 @@ Linux too; Docker Desktop provides it natively.
   re-ingesting an unchanged corpus re-embeds nothing.
 - **`HEALTHCHECK` on `/_stcore/health`**: Streamlit's own liveness endpoint. It is
   probed with Python's `urllib` because the slim image has no `curl`.
-- **Exec-form `CMD`**: Streamlit runs as PID 1 and receives `SIGTERM` directly, so
-  `docker stop` is immediate instead of waiting for the kill timeout.
+- **`exec` in the `CMD`**: the shell form is needed to expand `${PORT:-8501}`,
+  and `exec` replaces the shell, so Streamlit runs as PID 1 and receives `SIGTERM`
+  directly; `docker stop` is immediate instead of waiting for the kill timeout.
 - **Ollama behind a profile**: most runs use a hosted LLM, so the multi-GB local
   model server only starts when asked for (`--profile local-llm`). The app's
   `depends_on ... condition: service_healthy` with `required: false` waits for
