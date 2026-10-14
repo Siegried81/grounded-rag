@@ -16,6 +16,7 @@ to count as ungrounded content and could push a correct French answer to 0.00.
 
 import re
 from dataclasses import dataclass, field
+from decimal import Decimal
 
 from rag.answer import REFUSAL_MESSAGE_SET, normalize_citations
 from rag.types import Retrieved
@@ -42,12 +43,13 @@ _ABBREV_END_RE = re.compile(
 )
 _MIN_CLAIM_WORDS = 4  # a sentence needs MORE than this many content words to count as a claim
 # A figure in the answer: digits with an optional decimal part. Thousand
-# separators (1,000 / 1 000 / 1.000) are stripped before comparing, so "24 months"
-# matches "24", "1,000" matches "1000", but "999" never matches "24". Years and
-# article numbers are figures too, which is the point: a wrong article is a wrong
-# claim.
+# separators (1,000 / 1 000 / 1.000, and the no-break spaces U+00A0 / U+202F that
+# EUR-Lex uses) are stripped before comparing, so "24 months" matches "24",
+# "1,000" matches "1000", but "999" never matches "24" and "240" never matches
+# "24". Years and article numbers are figures too, which is the point: a wrong
+# article is a wrong claim.
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
-_THOUSANDS_RE = re.compile(r"(?<=\d)[ ,.](?=\d{3}\b)")
+_THOUSANDS_RE = re.compile(r"(?<=\d)[ ,.  ](?=\d{3}\b)")
 # Negation markers of the three answer languages. A cited sentence that negates
 # while none of its sources negates anything is read as a contradiction
 # candidate: "does not cover" against "covers". A heuristic, so it is reported
@@ -60,10 +62,62 @@ _NEGATION_RE = re.compile(
 )
 
 
-def _numbers(text: str) -> set[str]:
-    """Normalised figures in `text`: separators removed, decimal comma as a point."""
+# Scale words in the answer languages. A figure followed by one can be checked
+# two ways, and either is accepted: expanded ("EUR 15 million" against Article
+# 99's "EUR 15 000 000") or as written ("$416,161 million" against a 10-K table
+# stated in millions, "416,161"). \s already covers U+00A0 and U+202F.
+_SCALES = {
+    "thousand": 10**3, "mille": 10**3, "duizend": 10**3,
+    "million": 10**6, "millions": 10**6, "miljoen": 10**6,
+    "billion": 10**9, "billions": 10**9, "milliard": 10**9, "milliards": 10**9, "miljard": 10**9,
+}
+_SCALED_RE = re.compile(
+    r"(\d+(?:[.,]\d+)?)\s*(" + "|".join(sorted(_SCALES, key=len, reverse=True)) + r")\b",
+    re.IGNORECASE,
+)
+
+
+def _figures(text: str) -> list[set[str]]:
+    """Each figure in `text` as the set of spellings that would support it.
+
+    Separators are removed and a decimal comma becomes a point; a figure with a
+    scale word carries both its expanded and its written value.
+    """
     cleaned = _THOUSANDS_RE.sub("", _CITATION_RE.sub(" ", text))
-    return {n.replace(",", ".").rstrip("0").rstrip(".") or "0" for n in _NUMBER_RE.findall(cleaned)}
+    figures = []
+    for match in _SCALED_RE.finditer(cleaned):
+        written = _normalise_figure(match.group(1))
+        value = Decimal(written) * _SCALES[match.group(2).lower()]
+        figures.append({_normalise_figure(format(value.normalize(), "f")), written})
+    plain = _SCALED_RE.sub(" ", cleaned)
+    figures.extend({_normalise_figure(n)} for n in _NUMBER_RE.findall(plain))
+    return figures
+
+
+def _numbers(text: str) -> set[str]:
+    """Every spelling of every figure in `text`: what a source can support."""
+    return set().union(*_figures(text))
+
+
+def _unsupported(sentence: str, source_text: str) -> list[str]:
+    """Figures of `sentence` that no spelling in the source supports.
+
+    A scaled figure is reported by its expanded value.
+    """
+    available = _numbers(source_text)
+    return sorted(max(f, key=len) for f in _figures(sentence) if not f & available)
+
+
+def _normalise_figure(figure: str) -> str:
+    """"2.50" and "2.5" are one figure; "240" and "24" are two.
+
+    Only a decimal part loses its trailing zeros: stripping them from a whole
+    number would read 1,000 as 1 and 35 000 000 as 35.
+    """
+    figure = figure.replace(",", ".")
+    if "." in figure:
+        figure = figure.rstrip("0").rstrip(".")
+    return figure or "0"
 
 # Function words of the three answer languages (articles, prepositions, pronouns,
 # auxiliaries) plus the one-letter leftovers of apostrophe splitting (l', d',
@@ -209,7 +263,7 @@ def verify_answer(
         if not cited_here:
             continue
         source_text = " ".join(sources[i - 1].chunk.text for i in cited_here)
-        missing = sorted(_numbers(sentence) - _numbers(source_text))
+        missing = _unsupported(sentence, source_text)
         unsupported.extend(n for n in missing if n not in unsupported)
         if _NEGATION_RE.search(_CITATION_RE.sub(" ", sentence)) and not _NEGATION_RE.search(source_text):
             negated.append(sentence)
