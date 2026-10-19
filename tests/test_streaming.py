@@ -20,7 +20,13 @@ from tests.test_api import _r, client, setup  # noqa: F401 - shared fixtures
 
 
 class StreamResp:
-    """Stand-in for a streamed requests.Response: a status and an iterable body."""
+    """Stand-in for a streamed requests.Response: a status and an iterable body.
+
+    The body goes over the wire as UTF-8 bytes, and `iter_lines` decodes it the
+    way requests does for a `text/event-stream` reply without a charset: as
+    ISO-8859-1. A client that asks for `decode_unicode=True` therefore gets
+    mojibake for any non-ASCII character, as it does against the real API.
+    """
 
     def __init__(self, lines, status_error=None, fail_after=None):
         self._lines = lines
@@ -35,14 +41,15 @@ class StreamResp:
         for i, line in enumerate(self._lines):
             if self._fail_after is not None and i == self._fail_after:
                 raise ConnectionError("connection reset mid-stream")
-            yield line
+            raw = line.encode("utf-8")
+            yield raw.decode("iso-8859-1") if decode_unicode else raw
 
 
 def _sse_lines(*pieces):
     """OpenAI-style stream body: one data line per delta, blank separators, [DONE]."""
     lines = []
     for p in pieces:
-        lines += [f"data: {json.dumps({'choices': [{'delta': {'content': p}}]})}", ""]
+        lines += [f"data: {json.dumps({'choices': [{'delta': {'content': p}}]}, ensure_ascii=False)}", ""]
     return lines + ["data: [DONE]", ""]
 
 
@@ -69,6 +76,17 @@ def test_openai_style_stream_yields_deltas_with_the_same_payload_plus_stream(mon
     assert payload["stream"] is True and payload["temperature"] == 0
     assert payload["messages"][0] == {"role": "system", "content": "sys"}
     assert llm.last_provider() == "groq"
+
+
+def test_stream_decodes_non_ascii_deltas_as_utf8(monkeypatch):
+    # gpt-oss writes 【S1】 and narrow no-break spaces; read as Latin-1 they became
+    # "ãS1ã" and "â¯", and the citation was no longer recognised.
+    pieces = ["Up to EUR 35 000 000 ", "【S1】."]
+    monkeypatch.setattr(llm.requests, "post", lambda url, **kw: StreamResp(_sse_lines(*pieces)))
+    assert list(llm.stream("hi", order=["groq"])) == pieces
+    lines = [json.dumps({"message": {"content": "€ 【S1】"}, "done": True}, ensure_ascii=False)]
+    monkeypatch.setattr(llm.requests, "post", lambda url, **kw: StreamResp(lines))
+    assert list(llm.stream("hi", order=["ollama"])) == ["€ 【S1】"]
 
 
 def test_ollama_stream_reads_ndjson_until_done(monkeypatch):

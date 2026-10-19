@@ -71,6 +71,19 @@ def _openai_style(url: str, key: str, model: str, prompt: str, system: str | Non
     return resp.json()["choices"][0]["message"]["content"]
 
 
+def _utf8_lines(resp) -> Iterator[str]:
+    """Yield the lines of a streamed response, decoded as UTF-8.
+
+    Not `iter_lines(decode_unicode=True)`: Groq sends `text/event-stream`
+    without a charset, so requests falls back to ISO-8859-1 and turns
+    "【S1】" into "ãS1ã", which no longer counts as a citation. Splitting
+    the raw bytes on newlines is safe, since no UTF-8 multi-byte sequence
+    contains one.
+    """
+    for line in resp.iter_lines():
+        yield line.decode("utf-8")
+
+
 def _openai_style_stream(url: str, key: str, model: str, prompt: str,
                          system: str | None) -> Iterator[str]:
     """Open a streamed OpenAI-compatible completion and return an iterator of text deltas.
@@ -92,7 +105,7 @@ def _openai_style_stream(url: str, key: str, model: str, prompt: str,
     resp.raise_for_status()
 
     def deltas() -> Iterator[str]:
-        for line in resp.iter_lines(decode_unicode=True):
+        for line in _utf8_lines(resp):
             if not line or not line.startswith("data:"):
                 continue
             data = line[len("data:"):].strip()
@@ -217,7 +230,7 @@ def _ollama_stream(prompt: str, system: str | None) -> Iterator[str]:
     resp.raise_for_status()
 
     def deltas() -> Iterator[str]:
-        for line in resp.iter_lines(decode_unicode=True):
+        for line in _utf8_lines(resp):
             if not line:
                 continue
             event = json.loads(line)
