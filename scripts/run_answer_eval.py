@@ -50,6 +50,7 @@ from rag.answer_metrics import (  # noqa: E402
 from rag.embed import get_embedder  # noqa: E402
 from rag.lexical import BM25Index  # noqa: E402
 from rag.logging_utils import never_crash_on_console_encoding  # noqa: E402
+from rag.nli import nli_summary  # noqa: E402
 from rag.retrieve import retrieve  # noqa: E402
 from rag.stats import wilson  # noqa: E402
 from rag.store import VectorStore  # noqa: E402
@@ -175,6 +176,12 @@ def evaluate_item(item: dict, corpus: str, store, bm25, embedder, k: int, mode: 
     row = {**base, **score_answer(item, answer.text, answer.refused, answer.sources,
                                   min_grounding=config.VERIFY_MIN_GROUNDING)}
     row["answer"] = answer.text
+    # Optional NLI entailment check per cited sentence, recorded beside the
+    # lexical grounding it never changes (None unless NLI_CHECK=true). Computed
+    # only for answered rows: a refusal cites nothing, so there is nothing to
+    # entail. This is what lets the answer eval measure NLI against the key-fact
+    # and judge verdicts (docs §8.2, §14).
+    row["nli"] = None if answer.refused else nli_summary(answer.text, answer.sources)
     row["top_score"] = retrieved[0].score if retrieved else None
     # A gate refusal made no LLM call, so no provider answered.
     row["provider"] = None if answer.refused else rag.llm.last_provider()
@@ -221,6 +228,49 @@ def print_summary(summaries: dict[str, dict], judge: bool) -> None:
         else:
             cells = [_fmt(s[key], spec) + _fmt_ci(s.get("ci", {}).get(key))
                      for s in summaries.values()]
+        print(f"{label:<28}" + "".join(f"{c:>{_COL}}" for c in cells))
+
+
+def nli_aggregates(rows: list[dict]) -> dict[str, dict]:
+    """Per-corpus NLI aggregates over answered rows that carry a check.
+
+    Empty when NLI_CHECK was off (every row's `nli` is None), so the caller can
+    skip the block entirely. `mean_entailed_fraction` is the mean over answered
+    rows of each answer's share of cited sentences the model reads as entailed by
+    their cited passage; `contradicted_sentences` counts sentences labelled
+    contradiction, the signal lexical grounding structurally cannot give.
+    """
+    corpora = list(dict.fromkeys(r.get("corpus", "unknown") for r in rows))
+    out: dict[str, dict] = {}
+    for c in corpora:
+        checked = [r for r in rows
+                   if r.get("corpus", "unknown") == c and r.get("nli")
+                   and not r["nli"].get("error") and r["nli"].get("checked")]
+        fracs = [r["nli"]["entailed_fraction"] for r in checked
+                 if r["nli"].get("entailed_fraction") is not None]
+        out[c] = {
+            "answers_checked": len(checked),
+            "sentences": sum(r["nli"]["checked"] for r in checked),
+            "mean_entailed_fraction": (sum(fracs) / len(fracs)) if fracs else None,
+            "contradicted_sentences": sum(len(r["nli"].get("contradicted") or []) for r in checked),
+        }
+    return out
+
+
+def print_nli(aggs: dict[str, dict]) -> None:
+    """Print the per-corpus NLI aggregate block; a no-op when NLI was off."""
+    if not any(a["answers_checked"] for a in aggs.values()):
+        return
+    names = list(aggs)
+    rows = [
+        ("NLI answers checked", "answers_checked", "d"),
+        ("NLI cited sentences", "sentences", "d"),
+        ("NLI mean entailed frac", "mean_entailed_fraction", ".3f"),
+        ("NLI contradicted sents", "contradicted_sentences", "d"),
+    ]
+    print(f"{'nli (NLI_CHECK=true)':<28}" + "".join(f"{n:>{_COL}}" for n in names))
+    for label, key, spec in rows:
+        cells = [_fmt(aggs[n][key], spec) for n in names]
         print(f"{label:<28}" + "".join(f"{c:>{_COL}}" for c in cells))
 
 
@@ -288,6 +338,7 @@ def main() -> None:
     print_summary(with_intervals(summarize_by_corpus(rows), rows), args.judge)
     print("-" * 80)
     print_diagnosis(diagnosis_counts(rows))
+    print_nli(nli_aggregates(rows))
     print(f"results: {out_path}")
 
 
