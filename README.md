@@ -329,8 +329,9 @@ all HTTP mocked). The count printed at the end is the current one.
 - **Grounding is lexical** (word overlap, not entailment); refusal detection is a
   phrase heuristic that missed a real refusal (`jb-01`, matched since). An optional NLI check per
   cited sentence (`NLI_CHECK=true`, off by default, `requirements-optional.txt`)
-  is reported beside the grounding score without changing it; it has not been run
-  on the evaluation sets, so no number here comes from it.
+  is reported beside the grounding score without changing it. Now measured on the
+  answer eval (deep dive §8.2): it is the most conservative of the three signals
+  and still does **not** catch `aa-03`, so it stays a reported signal, not a gate.
 - **The system prompt is extractable by default**: `leak-02` reproduced it
   verbatim. The opt-in `USER_TURN_GUARD=true` closes it (measured; deep dive §8.3),
   but it is off by default, so the default pipeline carries this limitation.
