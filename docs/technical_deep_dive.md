@@ -758,10 +758,25 @@ Two project-level consequences:
   cannot: the answer's words come from the cited passage. The optional judge
   (`--judge`) grades *support by the sources*, explicitly "not real-world truth",
   so it would have to score the dropped scope qualifier as an overstated detail
-  (rubric 1) rather than as a factual error — plausible, but not guaranteed, and
-  untested here. An entailment check against Article 99 is the only one of the
-  three that addresses the actual defect. This row is not yet caught by anything
-  automatic.
+  (rubric 1) rather than as a factual error — plausible, but not guaranteed. An
+  entailment check against Article 99 is the only one of the three that addresses
+  the actual defect.
+- **Measured, with `NLI_CHECK=true` now wired into the answer eval (24 October
+  2026): none of the three catches `aa-03`.** The judge scores it 2/2, lexical
+  verify is ok, and the NLI check labels its one cited sentence **entailment**
+  (`entailed_fraction` 1.00, p_entail 0.47) — because the cited passage does carry
+  a fine figure, so the sentence *is* entailed by the passage it was checked
+  against. The defect is that the figure belongs to a different article's scope,
+  which an entailment check against *the sentence's own cited source* cannot see;
+  only one against Article 99 could. The row stays caught by nothing automatic,
+  now confirmed rather than projected. More broadly, over the 27 answered rows
+  with a check, NLI is the **most conservative** of the three signals: 11/27 are
+  fully entailed with no contradiction, against 22/27 key-fact-complete and 27/27
+  judge-faithful. On `filings_sections` its mean entailed fraction is only 0.25
+  (nine answers at 0.00) while key-fact and the judge call them faithful — the
+  xsmall NLI model reads specific numeric 10-K sentences as *neutral*, not
+  *entailed*, against a long premise. So the check is a noisy extra signal, not a
+  gate: it is reported beside grounding and never folded into `ok` (`logs/answer_eval_nli.jsonl`).
 
 ### 8.3 Red team (`eval/redteam.jsonl`, `scripts/run_redteam.py`)
 
@@ -1379,15 +1394,27 @@ standard.
    re-running both live evaluations once, so the key-fact figures, the
    verify-ok rate under the figure check and `jb-01` under the widened
    `_STRONG_REFUSAL_RE` are measured rather than projected (§8).
-2. ~~**Cross-encoder re-ranker**~~ — built, off by default: `RERANKER=cross_encoder`
-   (§5). Still to do: measure it with `scripts/run_eval.py` against the published
-   retrieval tables (the main lever expected on the filings MRR) before deciding
-   whether it should become the default.
-3. **Semantic faithfulness**: the NLI entailment check per cited sentence is
-   built (§7.1, `NLI_CHECK=true`, off by default). Still to do: run it on the
-   answer evaluation, measure its agreement with the key-fact and judge verdicts
-   (`aa-03` is the first row to check), and/or promote the LLM judge from opt-in
-   to a regular part of the answer evaluation.
+2. ~~**Cross-encoder re-ranker**~~ — built and now measured, off by default:
+   `RERANKER=cross_encoder` (§5). Measured with `scripts/run_eval.py` at `k=3`
+   (24 October 2026): the predicted MRR lever is real — MRR **0.746 → 0.891** on
+   `ai_act_sections` and **0.840 → 0.940** on `filings_sections`, and filings
+   recall@3/hit@3 reached 1.000 (the "market risks" miss fixed). The one cost is a
+   small `ai_act_sections` recall@3 dip (0.957 → 0.935, one relevant source pushed
+   out of the top 3 on one question, n=23). Still to do: decide whether the MRR
+   gain is worth the recall dip and the `sentence-transformers`/`torch` dependency
+   before making it the default.
+3. ~~**Semantic faithfulness**~~ — built and now measured, off by default: the NLI
+   entailment check per cited sentence (§7.1, `NLI_CHECK=true`), wired into
+   `scripts/run_answer_eval.py` on 24 October 2026. Measured against the key-fact
+   and judge verdicts (§8.2): NLI is the most conservative of the three (11/27
+   answers fully entailed vs 22/27 key-fact-complete and 27/27 judge-faithful),
+   does **not** catch `aa-03` (it entails the sentence against its own cited
+   passage, which does carry a fine), and on the numeric 10-K answers the xsmall
+   model reads correct sentences as *neutral* (mean entailed fraction 0.25). So it
+   stays a reported-beside-grounding signal, not a gate. Still to do: a stronger
+   NLI model and a premise that is the *right* article, not the cited one, before
+   it could catch `aa-03`; and/or promoting the LLM judge from opt-in to a regular
+   part of the answer evaluation.
 4. **Larger eval sets**: more answer questions per corpus, more unanswerable
    traps, several companies' 10-Ks, and more red-team cases per category, so
    rates move in steps smaller than 5%.
