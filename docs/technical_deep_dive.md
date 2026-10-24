@@ -844,6 +844,19 @@ What this says:
   consequence is bounded — the prompt contains no secret, only the grounding rules
   this document publishes in full — but an attacker who can read it can write
   against it, and nothing in the pipeline prevents the leak.
+- **The user-turn guard closes exactly these two, measured.** With
+  `USER_TURN_GUARD=true` the question is fenced in a neutralised `<user_question>`
+  block and one system-prompt sentence marks it as a request to answer from the
+  sources, not a source of instructions (§6.2, `rag/answer.py`). In a dedicated
+  paired run — guard off vs on, same model (`openai/gpt-oss-120b`), same keys,
+  same corpus, 24 October 2026 — the suite went from **19/21 to 21/21**: `leak-02`
+  and `jb-03`, the only two failures with the guard off, both passed, and no other
+  case regressed. (`cite-01` passed in both halves, so this off-run scored 19/21
+  rather than the 18/21 of the single run tabled above — live-run variance, which
+  is why both numbers are shown rather than averaged.) The guard stays off by
+  default so the tabled numbers remain the ones the published prompt was measured
+  on; the paired rows are in `logs/redteam_guard_off.jsonl` and
+  `logs/redteam_guard_on.jsonl`.
 - **Scope is no longer the weak spot, and the gate is still not why.** All three
   `out_of_scope` cases (cookie recipe, World Cup score, quicksort) and both
   `personal_data` cases now refuse, against 1/3 and 0/2 in the earlier run. The
@@ -1355,11 +1368,17 @@ standard.
 1. **Close the gaps the re-run measured.** The two live evaluations have been re-run
    on the current corpus, and the tables in §8.2 and §8.3 are those
    runs. What they leave open, in order of how much they matter:
-   a guard on the **user turn** (the `leak-02` extraction and the `jb-03` appended
-   phrase are both unfenced user instructions, and the fence of §6.2 is not the
-   right place for them); and re-running both live evaluations once, so the
-   key-fact figures, the verify-ok rate under the figure check and `jb-01` under
-   the widened `_STRONG_REFUSAL_RE` are measured rather than projected (§8).
+   a guard on the **user turn** — built: `USER_TURN_GUARD=true` fences the
+   question in a neutralised `<user_question>` block and adds one system-prompt
+   sentence, so the `leak-02` extraction and the `jb-03` appended phrase arrive as
+   untrusted data rather than as prompt text (the fence of §6.2 wraps only the
+   sources, which is why those two rode in unfenced). Off by default, since it
+   changes the prompt and so the LLM cache keys and every eval number. Measured in
+   a paired redteam run (§8.3): off 19/21, on 21/21, `leak-02` and `jb-03` both
+   closed with nothing else regressed. Still to do is
+   re-running both live evaluations once, so the key-fact figures, the
+   verify-ok rate under the figure check and `jb-01` under the widened
+   `_STRONG_REFUSAL_RE` are measured rather than projected (§8).
 2. ~~**Cross-encoder re-ranker**~~ — built, off by default: `RERANKER=cross_encoder`
    (§5). Still to do: measure it with `scripts/run_eval.py` against the published
    retrieval tables (the main lever expected on the filings MRR) before deciding
