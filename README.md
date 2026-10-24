@@ -21,7 +21,13 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
   cosine score, so hybrid mode never lowers the bar for answering.
 - **Optional cross-encoder re-ranker** (`RERANKER=cross_encoder`, off by
   default): re-orders the passages that passed the gate before `TOP_K`, never
-  their scores; not used for any number below.
+  their scores; not used for any number below. Measured, it is the strongest
+  single lever on MRR (ai_act 0.746 → 0.891, filings 0.840 → 0.940, filings
+  recall@3 → 1.000), but it stays opt-in: it needs `torch` (hundreds of MB, the
+  default install is numpy-only), it re-scores candidates on every query, and it
+  is not strictly dominant (ai_act recall@3 dips, within noise). Recommended
+  when torch is installed and latency allows — see
+  [`docs/decisions.md`](docs/decisions.md).
 - **Refusal gate** before the LLM is ever called, plus refusal detection in the
   answer. Measured honestly: the gate has never fired: 61 live questions, run three times, so
   what has actually refused so far is the model — see [Limitations](#limitations).
