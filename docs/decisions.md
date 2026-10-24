@@ -67,3 +67,29 @@ One dated entry per change that alters what a number or a verdict means. Append,
   18/21 -> 18/21 with a different third failure: `jb-01` now passes, `cite-01`
   refused correctly but repeated the forbidden `[S9]` label. Refusals gate /
   model 0/10. The gate has fired zero times over 61 questions run three times.
+
+## 2026-10-24 — The cross-encoder reranker stays off by default (opt-in)
+
+- **What:** `RERANKER=none` remains the default; the cross-encoder
+  (`cross-encoder/ms-marco-MiniLM-L-6-v2`, `rag/rerank.py`) stays an opt-in set
+  with `RERANKER=cross_encoder`. It was measured this day on both corpora at
+  k = 3 (`run_eval.py`): ai_act MRR 0.746 -> 0.891 with recall@3 0.957 -> 0.935;
+  filings MRR 0.840 -> 0.940 with recall@3 / hit@3 0.900 -> 1.000.
+- **Why:** three reasons outweigh the MRR gain. (1) It needs `torch` +
+  `sentence-transformers` (`requirements-optional.txt`, hundreds of MB); the
+  default install stays numpy-only, as the README advertises. (2) It re-scores
+  `CANDIDATE_K` candidates on every query — a real per-query cost on CPU that a
+  silent default should not impose on the interactive UI. (3) It is not strictly
+  dominant: ai_act recall@3 dips (noise at n = 23, but not a free win), and
+  recall is what feeds cite-or-refuse. The MRR gain is in ordering, while the
+  answer receives the full `top_k` set regardless of internal order, so a better
+  rank-1 helps less at answer time than the MRR delta suggests.
+- **What changes in the numbers:** nothing in the published default tables — they
+  are measured with `RERANKER=none`. The figures above are the opt-in path and
+  are reported as such.
+- **Recommended when:** `torch` is installed and the latency budget allows it
+  (set `RERANKER=cross_encoder`). It is the strongest single lever on MRR and
+  takes filings retrieval to recall@3 = 1.000.
+- **Revisit if:** the default install gains torch for another reason (then the
+  dependency objection falls), or a lighter reranker (ONNX / distilled) removes
+  the latency cost — either would make a default-on reranker defensible.
