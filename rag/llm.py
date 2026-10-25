@@ -57,9 +57,9 @@ def _messages(prompt: str, system: str | None) -> list[dict]:
 
 
 def _openai_style(url: str, key: str, model: str, prompt: str, system: str | None) -> str:
-    """Call an OpenAI-compatible chat endpoint (Groq, OpenRouter) and return the text.
+    """Call an OpenAI-compatible chat endpoint (Groq, OpenRouter, Hugging Face) and return the text.
 
-    Both hosted providers share one wire format, so one helper avoids duplication.
+    The hosted providers share one wire format, so one helper avoids duplication.
     """
     resp = requests.post(
         url,
@@ -194,6 +194,14 @@ def _openrouter(prompt: str, system: str | None, call=_openai_style):
     )
 
 
+def _huggingface(prompt: str, system: str | None, call=_openai_style):
+    """Call Hugging Face's Inference Providers router (OpenAI wire format)."""
+    return call(
+        "https://router.huggingface.co/v1/chat/completions",
+        config.HF_TOKEN, config.HF_MODEL, prompt, system,
+    )
+
+
 def _ollama(prompt: str, system: str | None) -> str:
     """Call the local Ollama chat endpoint (non-streaming) and return the reply text."""
     resp = requests.post(
@@ -251,6 +259,7 @@ def _provider_table() -> dict:
     return {
         "groq": (_groq, config.GROQ_API_KEYS),
         "openrouter": (_openrouter, config.OPENROUTER_API_KEY),
+        "huggingface": (_huggingface, config.HF_TOKEN),
         "ollama": (_ollama, True),
     }
 
@@ -299,6 +308,7 @@ def _stream_table() -> dict:
     return {
         "groq": lambda p, s: _groq(p, s, call=_openai_style_stream),
         "openrouter": lambda p, s: _openrouter(p, s, call=_openai_style_stream),
+        "huggingface": lambda p, s: _huggingface(p, s, call=_openai_style_stream),
         "ollama": _ollama_stream,
     }
 
@@ -357,13 +367,18 @@ def _cache_path(names: list[str], prompt: str, system: str | None):
     """Cache file for this exact request, or None when caching is off.
 
     The key covers the provider order and every model in it, so changing the
-    configured model or provider never serves an answer from another one.
+    configured model or provider never serves an answer from another one. The
+    Hugging Face model is added only when that provider is in the order, so
+    keys built before it existed still match.
     """
     if not config.LLM_CACHE:
         return None
+    models = [config.GROQ_MODEL, config.OPENROUTER_MODEL, config.OLLAMA_LLM_MODEL]
+    if "huggingface" in names:
+        models.append(config.HF_MODEL)
     request = {
         "order": names,
-        "models": [config.GROQ_MODEL, config.OPENROUTER_MODEL, config.OLLAMA_LLM_MODEL],
+        "models": models,
         "system": system,
         "prompt": prompt,
     }

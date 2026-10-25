@@ -39,9 +39,10 @@ them at run time with `-e NAME=value` or `--env-file .env` (see `.env.example` i
 
 | Variable | Purpose |
 |---|---|
-| `LLM_PROVIDER` | `groq`, `openrouter` or `ollama` |
+| `LLM_PROVIDER` | `groq`, `openrouter`, `huggingface` or `ollama` |
 | `GROQ_API_KEY` | Groq key (free tier is enough) |
 | `OPENROUTER_API_KEY` | OpenRouter key |
+| `HF_TOKEN` | Hugging Face token; set, it adds Inference Providers to the fallback chain (paid from the account's credits) |
 | `OLLAMA_URL` | Ollama server, e.g. `http://host.docker.internal:11434` |
 | `EMBED_PROVIDER` | embedding backend |
 
