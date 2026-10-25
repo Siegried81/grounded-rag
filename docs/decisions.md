@@ -93,3 +93,23 @@ One dated entry per change that alters what a number or a verdict means. Append,
 - **Revisit if:** the default install gains torch for another reason (then the
   dependency objection falls), or a lighter reranker (ONNX / distilled) removes
   the latency cost — either would make a default-on reranker defensible.
+
+## 2026-10-25 — Hugging Face joins the LLM fallback chain only when a token is set
+
+- **What:** a `huggingface` provider in `rag/llm.py` calls Hugging Face's
+  OpenAI-compatible router (`router.huggingface.co/v1`) with `HF_TOKEN` and
+  `HF_MODEL` (default `meta-llama/Llama-3.1-8B-Instruct`). `LLM_PROVIDER=huggingface`
+  makes it first; otherwise it sits before Ollama, and only when `HF_TOKEN` is set.
+- **Why conditional:** the provider order and its models are part of the LLM cache
+  key (§9.3 of the deep dive). Listing it unconditionally would have changed the
+  key of every request, so every cached answer — including those behind the
+  published evaluations — would have been re-paid on the next run. Without a
+  token, the order and the key are exactly what they were
+  (`tests/test_llm_huggingface.py::test_cache_keys_without_huggingface_are_unchanged`).
+- **What changes in the numbers:** nothing published. The default chain, models
+  and cache keys are unchanged; no evaluation was re-run with this provider.
+- **Measured on the day:** the router accepts the account token but answers 402
+  ("no remaining credits"): the account has no Inference Providers credits, so in
+  practice the provider currently falls through to the next one.
+- **Revisit if:** the account gets credits — then the answer eval can be run with
+  `LLM_PROVIDER=huggingface` to compare it with Groq.
