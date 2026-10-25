@@ -48,7 +48,7 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
 - **Prompt-injection fence**: retrieved text is wrapped in `<source id="S#">`
   blocks marked as untrusted data; tags inside a passage are neutralised.
 - **Free-tier resilience**: rotation over up to 5 Groq keys, waiting for the
-  rate-limit window Groq announces, fallback to OpenRouter / Ollama, and an
+  rate-limit window Groq announces, fallback to OpenRouter / Hugging Face / Ollama, and an
   on-disk LLM response cache.
 - **Two UIs** (React + FastAPI on port 8002, or Streamlit), **Docker**, and one
   structured LLM call per question — no agent loop.
@@ -302,13 +302,25 @@ live LLM call per question:
 
 | Role       | Default                              | Fallbacks                       | `.env`           |
 | ---------- | ------------------------------------ | ------------------------------- | ---------------- |
-| Generation | Groq `openai/gpt-oss-120b` (1–5 keys)| OpenRouter, Ollama `llama3.2:3b`| `LLM_PROVIDER`   |
+| Generation | Groq `openai/gpt-oss-120b` (1–5 keys)| OpenRouter, Hugging Face Inference Providers (`HF_TOKEN` set), Ollama `llama3.2:3b`| `LLM_PROVIDER`   |
 | Embeddings | Ollama `nomic-embed-text` (local)    | `sentence_transformers` in-process, or any OpenAI-compatible endpoint | `EMBED_PROVIDER` |
 With Ollama for both, everything runs offline and free.
 
+**Hugging Face.** Every optional local model comes from the Hugging Face Hub
+and runs in-process through `sentence-transformers`, downloaded once on first
+use: the embedder `sentence-transformers/all-MiniLM-L6-v2`
+(`EMBED_PROVIDER=sentence_transformers`), the reranker
+`cross-encoder/ms-marco-MiniLM-L-6-v2` (`RERANKER=cross_encoder`, measured in
+[`docs/decisions.md`](docs/decisions.md)) and the entailment check
+`cross-encoder/nli-deberta-v3-xsmall` (`NLI_CHECK=true`). For generation,
+`LLM_PROVIDER=huggingface` (or any `HF_TOKEN`, which adds it to the fallback
+chain) calls Hugging Face's OpenAI-compatible router with `HF_MODEL`
+(`meta-llama/Llama-3.1-8B-Instruct` by default). That router is paid from the
+account's credits: without any it answers 402 and the chain moves on.
+
 ## Tests
 
-`python -m pytest -q` — **429 passing** (plus 1 skipped without `faiss-cpu`; 430 with it), the whole suite offline (fake embedder,
+`python -m pytest -q` — **445 passing** (plus 1 skipped without `faiss-cpu`; 446 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations

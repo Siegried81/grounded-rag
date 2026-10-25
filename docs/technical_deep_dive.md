@@ -252,7 +252,8 @@ not checked.
 
 `llm.complete(prompt, system=...)` is a provider-agnostic, single-shot chat call
 at `temperature=0`. It tries providers in priority order (`groq → openrouter →
-ollama` by default), skips any whose API key is missing, falls through on failure,
+ollama` by default, with `huggingface` before `ollama` when `HF_TOKEN` is set),
+skips any whose API key is missing, falls through on failure,
 and raises `LLMError` only if all fail, with the reason each provider did not
 produce text. There is no agent loop and no tool use: one structured call per
 question. The free-tier mechanics around that call (key rotation, rate-limit
@@ -998,7 +999,8 @@ the SHA-256 of a canonical JSON object containing:
 
 - the **provider order** actually used,
 - **every model** in the chain (`GROQ_MODEL`, `OPENROUTER_MODEL`,
-  `OLLAMA_LLM_MODEL`),
+  `OLLAMA_LLM_MODEL`, plus `HF_MODEL` only when `huggingface` is in the order,
+  so keys written before that provider existed still match),
 - the **system prompt**,
 - the **full prompt** (which includes the retrieved passages).
 
@@ -1148,7 +1150,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**430 tests, all offline: 429 passing and 1 skipped without `faiss-cpu`, 430 passing with it.** The whole suite runs with:
+**446 tests, all offline: 445 passing and 1 skipped without `faiss-cpu`, 446 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
