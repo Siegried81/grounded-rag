@@ -156,7 +156,7 @@ HOSTED_EMBED_API_KEY = os.getenv("HOSTED_EMBED_API_KEY", "")
 ST_EMBED_MODEL = os.getenv("ST_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
 # --- Generation backend ------------------------------------------------------
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")  # groq | openrouter | ollama
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")  # groq | openrouter | huggingface | ollama
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 # Up to five Groq keys (GROQ_API_KEY, GROQ_API_KEY_2 .. _5). The client rotates to
 # the next key when one is rate-limited or fails, which multiplies the free-tier
@@ -177,6 +177,12 @@ GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.2:3b")
+# Hugging Face Inference Providers: one OpenAI-compatible router in front of
+# several hosts, paid from the account's credits (a 402 once they run out,
+# which falls through like any other failure). The token is the same one
+# `huggingface_hub` reads for model downloads.
+HF_TOKEN = os.getenv("HF_TOKEN", "")
+HF_MODEL = os.getenv("HF_MODEL", "meta-llama/Llama-3.1-8B-Instruct")
 
 # Groq's free tier limits tokens per minute per key. When every key answers 429,
 # wait for the window Groq announces (capped here) and retry once before falling
@@ -191,8 +197,11 @@ LLM_CACHE = os.getenv("LLM_CACHE", "1") == "1"
 LLM_CACHE_DIR = INDEX_DIR / "llm_cache"
 
 # Ordered fallback chain used by rag/llm.py. First provider is the configured one.
+# Hugging Face joins the chain only when a token is set: the order is part of
+# the LLM cache key, so listing it unconditionally would invalidate every
+# answer already cached for a setup that never uses it.
 LLM_FALLBACK_ORDER = [
-    p for p in [LLM_PROVIDER, "groq", "openrouter", "ollama"]
+    p for p in [LLM_PROVIDER, "groq", "openrouter", "huggingface" if HF_TOKEN else "", "ollama"]
     if p and p not in ("",)
 ]
 
