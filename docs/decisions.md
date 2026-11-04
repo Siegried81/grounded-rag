@@ -113,3 +113,28 @@ One dated entry per change that alters what a number or a verdict means. Append,
   practice the provider currently falls through to the next one.
 - **Revisit if:** the account gets credits — then the answer eval can be run with
   `LLM_PROVIDER=huggingface` to compare it with Groq.
+
+## 2026-11-04 — One Qdrant collection per store, named `<QDRANT_COLLECTION>_<index dir>`
+
+- **What:** `rag/store.py` now builds each store's Qdrant index into its own
+  collection, `f"{config.QDRANT_COLLECTION}_{index_dir.name}"`
+  (`grounded_rag_ai_act_sections`, `grounded_rag_filings_sections`). Before, every
+  store used the single name `config.QDRANT_COLLECTION`.
+- **Why:** `QdrantIndex._ensure_ready` deletes and recreates its collection on the
+  first search. `api/main.py` and `app.py` load one store per corpus in the same
+  process, so the second store's build replaced the first store's points, and
+  point id `i` of the shared collection then mapped to the wrong store's row `i`:
+  wrong passages with plausible scores, or an `IndexError` when the other store
+  was smaller. No test saw it because the stand-in client kept one point dict
+  regardless of collection name. The stand-in now keeps a server dict keyed by
+  collection name, and
+  `tests/test_qdrant_index.py::test_two_stores_in_one_process_do_not_share_a_collection`
+  (store A, 40 rows; store B, 5 rows; search A, B, then A again) failed before the
+  fix, returning B's five ids on A's rows, and passes after it.
+- **What changes in the numbers:** nothing published. `VECTOR_INDEX=qdrant` is
+  opt-in and no evaluation ran through it. `QDRANT_COLLECTION` is now a prefix,
+  not the collection name; an existing collection called `grounded_rag` is left
+  alone and no longer used.
+- **Revisit if:** a deployment needs a fixed collection name per corpus (then a
+  `QDRANT_COLLECTION_<CORPUS>` override), or the index dir name stops being the
+  corpus name.

@@ -2,10 +2,10 @@
 
 A learning port of `docker-compose.yml` to Kubernetes. The Streamlit app (8501),
 the FastAPI API (8002), the one-shot index builder as a Job, and an Ollama
-sidecar (11434).
+Deployment (11434).
 
-**Is k8s needed here?** No. A single RAG app belongs on Docker Compose or a PaaS.
-This port is to practise the objects: Deployment, Service, **Job**, PVC, Secret.
+Is k8s needed here? No. One RAG app belongs on Compose or a PaaS. I did this
+port to practise the objects: Deployment, Service, Job, PVC, Secret.
 
 ## What maps to what
 
@@ -13,20 +13,24 @@ This port is to practise the objects: Deployment, Service, **Job**, PVC, Secret.
 |---|---|
 | `app` service (Streamlit 8501) | Deployment + Service `rag-app` |
 | `api` service (uvicorn 8002) | Deployment + Service `rag-api` |
-| `ingest` one-shot (`restart: no`) | **Job** `rag-ingest` |
+| `ingest` one-shot (`restart: no`) | Job `rag-ingest` |
 | `ollama` service (11434) | Deployment + Service `rag-ollama` |
 | `.env` file | Secret `rag-secrets` |
 | named volume `rag_index` | PVC `rag-index` |
 | named volume `rag_logs` | PVC `rag-logs` |
 | named volume `ollama_models` | PVC `rag-ollama-models` |
 
-The one-shot `ingest` becomes a **Job**, not a Deployment: a Job runs a task to
+The one-shot `ingest` becomes a Job, not a Deployment: a Job runs a task to
 completion and stops, which is exactly the "build the index once" shape. A
 Deployment would restart it forever.
 
 Note: Compose mounted `./data` read-only for the corpora. Here the data is assumed
 baked into the image; if you keep corpora outside, add a read-only PVC and mount
 it at `/app/data`.
+
+`rag-index` and `rag-logs` are ReadWriteOnce PVCs mounted by three pods (the Job,
+the app, the api). That works on single-node kind only; on a multi-node cluster
+those pods could land on different nodes and the second mount would fail.
 
 ## Run it locally with kind
 
@@ -42,6 +46,7 @@ kubectl create secret generic rag-secrets --from-env-file=../.env
 # check the index -- so wait for the Job before sending traffic (queries error
 # until the index exists)
 kubectl apply -f grounded-rag.yaml
+kubectl exec deploy/rag-ollama -- ollama pull nomic-embed-text   # the default embedder; skip if EMBED_PROVIDER is hosted
 kubectl wait --for=condition=complete job/rag-ingest --timeout=600s
 kubectl get pods
 
