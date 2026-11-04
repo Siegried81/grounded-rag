@@ -7,7 +7,9 @@ diffed without special tooling.
 
 `search` is also the seam for an optional approximate index: with
 `VECTOR_INDEX=faiss` an HNSW graph (`rag/ann.py`) proposes the candidate rows,
-and this module still computes and orders their scores (see `_search_ann`).
+and with `VECTOR_INDEX=qdrant` a Qdrant collection (`rag/qdrant_index.py`) does;
+either way this module still computes and orders their scores (see
+`_search_ann` / `_search_qdrant`).
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ class VectorStore:
         self._chunks: list[Chunk] = []
         self._vectors: np.ndarray = np.empty((0, 0), dtype=np.float32)
         self._ann = None  # FAISS graph, built on the first VECTOR_INDEX=faiss search
+        self._qdrant = None  # Qdrant index, built on the first VECTOR_INDEX=qdrant search
 
     def __len__(self) -> int:
         """Return the number of stored chunks."""
@@ -66,6 +69,7 @@ class VectorStore:
             self._vectors = np.vstack([self._vectors, new])
         self._chunks.extend(chunks)
         self._ann = None  # the graph no longer covers every row
+        self._qdrant = None  # the Qdrant collection no longer covers every row
 
     def search(self, query_vec: list[float], top_k: int) -> list[Retrieved]:
         """Return the `top_k` most cosine-similar chunks, best first.
@@ -77,6 +81,8 @@ class VectorStore:
             return []
         if config.VECTOR_INDEX == "faiss":
             return self._search_ann(query_vec, top_k)
+        if config.VECTOR_INDEX == "qdrant":
+            return self._search_qdrant(query_vec, top_k)
         q = np.asarray(query_vec, dtype=np.float32)
         q_norm = np.linalg.norm(q)
         norms = np.linalg.norm(self._vectors, axis=1)
@@ -100,6 +106,32 @@ class VectorStore:
         if self._ann is None:
             self._ann = FaissIndex(self._vectors)
         rows = np.asarray(self._ann.candidates(query_vec, top_k), dtype=np.int64)
+        if rows.size == 0:
+            return []
+        q = np.asarray(query_vec, dtype=np.float32)
+        q_norm = np.linalg.norm(q)
+        vecs = self._vectors[rows]
+        denom = np.linalg.norm(vecs, axis=1) * q_norm
+        dots = vecs @ q
+        scores = np.divide(dots, denom, out=np.zeros_like(dots), where=denom > 0)
+        order = np.lexsort((rows, -scores))[: min(top_k, len(rows))]
+        return [Retrieved(self._chunks[rows[i]], float(scores[i])) for i in order]
+
+    def _search_qdrant(self, query_vec: list[float], top_k: int) -> list[Retrieved]:
+        """`search` through a Qdrant collection: it proposes rows, this method scores them.
+
+        Identical contract to `_search_ann`: Qdrant only proposes candidate
+        rows, and the proposed rows are then scored with the same cosine
+        expression as the brute-force path, on the same stored vectors, and
+        ordered the same way (score, then row). Every passage returned therefore
+        carries the score the refusal/relevance threshold was set against, so
+        that threshold keeps the same meaning; only recall is approximate.
+        """
+        from rag.qdrant_index import QdrantIndex
+
+        if self._qdrant is None:
+            self._qdrant = QdrantIndex(self._vectors)
+        rows = np.asarray(self._qdrant.candidates(query_vec, top_k), dtype=np.int64)
         if rows.size == 0:
             return []
         q = np.asarray(query_vec, dtype=np.float32)
