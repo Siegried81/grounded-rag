@@ -8,9 +8,9 @@ product per query starts to cost.
 FAISS only PROPOSES rows here. The store then scores those rows with its own
 cosine formula, on its own stored vectors, and orders them as the brute-force
 path does, so a passage found through FAISS carries the score
-`SCORE_THRESHOLD` was set against. What the ANN path can change is recall — a
-passage the graph fails to propose is missing — never the score of a passage it
-returns. That is why it is opt-in (`VECTOR_INDEX=faiss`).
+`SCORE_THRESHOLD` was set against. The ANN path can only lose recall: a passage
+it doesn't propose is missing. It can't change the score of one it returns.
+That is why it is opt-in (`VECTOR_INDEX=faiss`).
 
 `faiss` is imported lazily: the default install does not have it, and this
 module must import (and the test suite run) without it.

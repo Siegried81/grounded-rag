@@ -130,7 +130,14 @@ class VectorStore:
         from rag.qdrant_index import QdrantIndex
 
         if self._qdrant is None:
-            self._qdrant = QdrantIndex(self._vectors)
+            # One collection per store: point id i is row i of THIS store's
+            # matrix, so two stores (one per corpus, as api/main.py and app.py
+            # load them) must not share a collection or the second build
+            # overwrites the first and its ids point at the wrong rows.
+            self._qdrant = QdrantIndex(
+                self._vectors,
+                collection=f"{config.QDRANT_COLLECTION}_{self.index_dir.name}",
+            )
         rows = np.asarray(self._qdrant.candidates(query_vec, top_k), dtype=np.int64)
         if rows.size == 0:
             return []

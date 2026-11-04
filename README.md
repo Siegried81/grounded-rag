@@ -12,7 +12,7 @@ Run against two very different corpora: the full English text of **Regulation (E
 annex, plus the title and the closing part — and one **SEC 10-K** (Apple FY2025) split into its six Item sections.
 No vector DB, no RAG framework: each step is one small, readable module.
 Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/architecture.md) ·
-[React UI & API](docs/react_ui.md) · [Docker](docs/docker.md)
+[React UI & API](docs/react_ui.md) · [Docker](docs/docker.md) · [Kubernetes](k8s/README.md)
 
 ## What's inside
 
@@ -296,6 +296,7 @@ live LLM call per question:
 .venv/bin/python scripts/run_phrasing_eval.py            # same question: original / casual / other_language wordings
 .venv/bin/python scripts/run_answer_eval.py              # answers; per-row provider and diagnosis columns
 .venv/bin/python scripts/run_redteam.py --verbose        # red team; writes logs/redteam_results.jsonl
+.venv/bin/python scripts/red_team.py --live              # live probes, opt-in, needs a key
 ```
 
 ## Providers
@@ -320,7 +321,7 @@ account's credits: without any it answers 402 and the chain moves on.
 
 ## Tests
 
-`python -m pytest -q` — **468 passing** (plus 1 skipped without `faiss-cpu`; 469 with it), the whole suite offline (fake embedder,
+`python -m pytest -q` — **470 passing** (plus 1 skipped without `faiss-cpu`; 471 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations
