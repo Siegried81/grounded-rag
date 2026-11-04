@@ -37,7 +37,10 @@ kind load docker-image siegried/grounded-rag:latest --name rag
 
 kubectl create secret generic rag-secrets --from-env-file=../.env
 
-# build the index first (the Job), wait for it, then start the apps
+# apply everything at once; the Job builds the index onto the shared rag-index
+# volume. The app and api come up alongside it -- their health probes don't
+# check the index -- so wait for the Job before sending traffic (queries error
+# until the index exists)
 kubectl apply -f grounded-rag.yaml
 kubectl wait --for=condition=complete job/rag-ingest --timeout=600s
 kubectl get pods

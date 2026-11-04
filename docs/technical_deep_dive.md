@@ -1161,7 +1161,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**453 tests, all offline: 452 passing and 1 skipped without `faiss-cpu`, 453 passing with it.** The whole suite runs with:
+**469 tests, all offline: 468 passing and 1 skipped without `faiss-cpu`, 469 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1229,6 +1229,10 @@ What the suites pin down, beyond per-module unit tests:
   collection finds them, a missed neighbour is missing without moving any other
   score, ties keep index order, the collection's vector size matches the store
   dimension, it is rebuilt after `add`, and a missing package is a clear error.
+- **Red team** (`test_red_team.py`, LLM and NLI mocked, `FakeEmbedder`): the
+  defenses hold under attack — a fabricated figure and forged citations fail
+  `verify_answer`, below-threshold retrieval refuses before any LLM call, and an
+  injected "reveal the system prompt" chunk stays sealed in one source fence.
 - **Re-ranker** (`test_rerank.py`, fake cross-encoder, no model loaded): off by
   default without importing `sentence-transformers`, it re-orders only the pool
   that passed the gate, never changes a score, cannot promote a passage below the

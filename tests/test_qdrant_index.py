@@ -8,8 +8,8 @@ VECTOR_INDEX=qdrant, Qdrant only proposes rows and the store scores them with
 its own cosine, a missing package is a clear error, and the default path never
 touches qdrant.
 
-The stand-in's `search` is an exact inner-product search over the upserted unit
-vectors, so when it proposes every row the result must equal the brute-force
+The stand-in's `query_points` is an exact inner-product search over the upserted
+unit vectors, so when it proposes every row the result must equal the brute-force
 path; a `propose` filter lets a test imitate a collection that misses rows.
 """
 
@@ -67,8 +67,17 @@ def _fake_qdrant(propose=None):
         def __init__(self, url=None):
             self.url = url
             self._points = {}
+            self._collections = set()
 
-        def recreate_collection(self, collection_name, vectors_config):
+        def collection_exists(self, collection_name):
+            return collection_name in self._collections
+
+        def delete_collection(self, collection_name):
+            self._collections.discard(collection_name)
+            self._points = {}
+
+        def create_collection(self, collection_name, vectors_config):
+            self._collections.add(collection_name)
             self._points = {}
             module.built.append((collection_name, vectors_config.size))
 
@@ -76,14 +85,14 @@ def _fake_qdrant(propose=None):
             for p in points:
                 self._points[p.id] = np.asarray(p.vector, dtype=np.float32)
 
-        def search(self, collection_name, query_vector, limit):
+        def query_points(self, collection_name, query, limit):
             ids = sorted(self._points)
             data = np.stack([self._points[i] for i in ids])
-            scores = data @ np.asarray(query_vector, dtype=np.float32)
+            scores = data @ np.asarray(query, dtype=np.float32)
             order = [ids[j] for j in np.argsort(-scores, kind="stable")]
             if propose:
                 order = propose(order)
-            return [_Hit(i) for i in order[:limit]]
+            return types.SimpleNamespace(points=[_Hit(i) for i in order[:limit]])
 
     module.QdrantClient = QdrantClient
     module.models = _Models
