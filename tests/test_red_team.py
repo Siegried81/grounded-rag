@@ -13,7 +13,7 @@ their real entry points and asserts that each one HOLDS:
 - Indirect prompt injection: the untrusted-data `<source>` fence built by
   `rag.answer._build_prompt` and the matching system-prompt instruction.
 
-Every test is fully offline and deterministic: the embedder is the repo's
+Every test is offline and deterministic: the embedder is the repo's
 `rag.embed.FakeEmbedder`, the store is a local fake, and the LLM is monkeypatched
 to a recorder. No index, network or API key is touched. Each test is named after
 the attack it represents. The one documented defense limitation (verify cannot

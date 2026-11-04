@@ -8,16 +8,18 @@ or need an index that lives outside the process.
 Qdrant only PROPOSES rows here. The store then scores those rows with its own
 cosine formula, on its own stored vectors, and orders them as the brute-force
 path does, so a passage found through Qdrant carries the score
-`SCORE_THRESHOLD` was set against. What the ANN path can change is recall — a
-passage Qdrant fails to propose is missing — never the score of a passage it
-returns. Same invariant as the FAISS backend.
+`SCORE_THRESHOLD` was set against. The ANN path can only lose recall: a passage
+it doesn't propose is missing. It can't change the score of one it returns.
+Same invariant as the FAISS backend.
 
-The collection is built in memory's image: point id `i` is row `i` of the
-store's vector matrix, the collection's vector size is the store's dimension,
-and its distance is DOT (inner product) over unit-length copies of the vectors,
-which equals cosine — the same trick `rag/ann.py` uses. Vectors are upserted
-lazily on the first search, not in the constructor, so a store that is never
-searched through Qdrant never touches the server.
+The collection mirrors the store's matrix: point id `i` is row `i` of that
+store's matrix; each store gets its own collection, named
+`<QDRANT_COLLECTION>_<index dir>`, so two stores loaded in one process never
+overwrite each other's points. The collection's vector size is the store's
+dimension, and its distance is DOT (inner product) over unit-length copies of
+the vectors, which is cosine, the same trick as `rag/ann.py`. Vectors are
+upserted lazily on the first search, not in the constructor, so a store that is
+never searched through Qdrant never touches the server.
 
 `qdrant_client` is imported lazily: the default install does not have it, and
 this module must import (and the test suite run) without it.
@@ -75,15 +77,26 @@ class QdrantIndex:
     def _ensure_ready(self) -> None:
         """Connect, (re)create the collection and upsert the vectors, once.
 
-        recreate_collection was dropped from recent qdrant-client, so this uses
-        the current API for the same effect: delete the collection if it exists,
-        then create it fresh, so it stays in step with the store's vectors.
+        recreate_collection is deprecated in current qdrant-client, so this
+        does the same in two steps: delete if it exists, then create. The
+        collection then stays in step with the store's vectors.
+
+        The first server call is collection_exists; it is caught broadly
+        because the client raises different exception types depending on the
+        transport, and a user with no server running needs one clear message.
         """
         if self._client is not None:
             return
         QdrantClient, models = _load_qdrant()
         client = QdrantClient(url=self._url)
-        if client.collection_exists(self._collection):
+        try:
+            exists = client.collection_exists(self._collection)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Qdrant server not reachable at {self._url}; "
+                "start one or set VECTOR_INDEX=numpy"
+            ) from exc
+        if exists:
             client.delete_collection(self._collection)
         client.create_collection(
             collection_name=self._collection,

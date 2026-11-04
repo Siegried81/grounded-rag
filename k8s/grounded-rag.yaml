@@ -1,6 +1,6 @@
 # Kubernetes manifests for grounded-rag.
 # Ported from docker-compose.yml: app (Streamlit, 8501), api (uvicorn, 8002),
-# the one-shot ingest (index builder) as a Job, and the ollama sidecar (11434).
+# the one-shot ingest (index builder) as a Job, and the Ollama Deployment (11434).
 # A single RAG app runs fine on Compose or a PaaS; k8s here is to practise the
 # objects (Deployment, Service, Job, PVC, Secret). See README.md.
 #
@@ -55,7 +55,11 @@ spec:
       containers:
         - name: ingest
           image: siegried/grounded-rag:latest
+          imagePullPolicy: IfNotPresent
           command: ["python", "cli.py", "ingest", "--corpus", "ai_act_sections"]
+          env:
+            - name: OLLAMA_URL
+              value: "http://rag-ollama:11434"
           envFrom:
             - secretRef:
                 name: rag-secrets
@@ -92,6 +96,7 @@ spec:
       containers:
         - name: app
           image: siegried/grounded-rag:latest
+          imagePullPolicy: IfNotPresent
           command:
             - python
             - -m
@@ -158,6 +163,7 @@ spec:
       containers:
         - name: api
           image: siegried/grounded-rag:latest
+          imagePullPolicy: IfNotPresent
           command:
             - python
             - -m
