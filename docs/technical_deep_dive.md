@@ -151,7 +151,7 @@ milliseconds, has no dependency, and the index is two inspectable files.
 a corpus far larger than the shipped ones, an in-memory FAISS HNSW graph
 (inner product over unit-length copies of the stored vectors, `M = 32`,
 `FAISS_EF_SEARCH = 64`) sits behind the same `store.search`. The graph only
-**proposes** rows: the store scores them with its own cosine expression on its own
+proposes rows: the store scores them with its own cosine expression on its own
 vectors and orders them as the brute-force path does (score, then row), so a
 passage found this way carries the score `SCORE_THRESHOLD` was set against. What
 ANN can change is recall. Measured on the two shipped indexes (stored vectors used
@@ -164,13 +164,19 @@ fast. `faiss-cpu` is imported lazily and lives in `requirements-optional.txt`.
 **Second ANN backend (`rag/qdrant_index.py`, `VECTOR_INDEX=qdrant`, off by
 default).** For deployments that already run a Qdrant server or want the index
 outside the process, a Qdrant collection sits behind the same `store.search`
-with the identical contract: the collection holds unit-length copies of the
-stored vectors (point id `i` = row `i`, distance `DOT`, which on unit vectors is
-cosine), it is built and upserted lazily on the first search, and it only
-**proposes** rows that the store then scores and orders exactly as the FAISS and
-brute-force paths do. Only recall is approximate; the refusal threshold keeps
-the same meaning. It reads `QDRANT_URL` and `QDRANT_COLLECTION`, and
-`qdrant-client` is imported lazily and lives in `requirements-optional.txt`.
+with the same contract: the collection holds unit-length copies of the
+stored vectors (point id `i` = row `i` of that store's matrix, distance `DOT`,
+which on unit vectors is cosine), it is built and upserted lazily on the first
+search, and it only proposes rows that the store then scores and orders exactly
+as the FAISS and brute-force paths do. Only recall is approximate; the refusal
+threshold keeps the same meaning. Each store gets its own collection, named
+`<QDRANT_COLLECTION>_<index dir>` (`grounded_rag_ai_act_sections`,
+`grounded_rag_filings_sections`): the API and the Streamlit app load one store
+per corpus in one process, and with a single shared collection the second
+store's build replaced the first's points, so point id `i` landed on the wrong
+store's row `i` (see `docs/decisions.md`, 2026-11-04). It reads `QDRANT_URL`
+and `QDRANT_COLLECTION` (a prefix), and `qdrant-client` is imported lazily and
+lives in `requirements-optional.txt`.
 
 ### 4.2 Keyword index (`rag/lexical.py`)
 
@@ -792,7 +798,10 @@ Two project-level consequences:
 
 ### 8.3 Red team (`eval/redteam.jsonl`, `scripts/run_redteam.py`)
 
-21 adversarial cases in **7 categories**:
+21 adversarial cases in **7 categories**. A second, smaller probe lives in
+`scripts/red_team.py --live`: the live counterpart of `tests/test_red_team.py`,
+it sends four hallucination and jailbreak questions through the real model and
+is never run by pytest.
 
 | Category | Cases | What it tries | Expected |
 |---|---:|---|---|
@@ -1157,11 +1166,14 @@ React UI. The container API uses port **8002**, the same as local development,
 so it does not collide with another service on uvicorn's default 8000.
 Step-by-step commands: `docs/docker.md`.
 
+A Kubernetes port for practice (Deployments, Services, a Job for the ingest,
+PVCs, a Secret) is in `k8s/`, with its own README.
+
 ---
 
 ## 12. Testing strategy
 
-**469 tests, all offline: 468 passing and 1 skipped without `faiss-cpu`, 469 passing with it.** The whole suite runs with:
+**471 tests, all offline: 470 passing and 1 skipped without `faiss-cpu`, 471 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1194,7 +1206,7 @@ What the suites pin down, beyond per-module unit tests:
 - **Answer metrics** (`test_answer_metrics.py`, 78 tests): refusal detection in
   EN/FR including the partial-answer rule, `None` on empty denominators, numeric
   fact matching across groupings, scales and French decimals, judge-reply parsing.
-- **Red team** (`test_redteam.py`): an out-of-scope case refuses before any LLM
+- **Red team: harness** (`test_redteam.py`): an out-of-scope case refuses before any LLM
   call, the injected passage lands in `[S1]` inside a fence, a passage cannot close
   its own fence, a followed injection is reported, forged citations fail, and the
   dataset itself is well formed.
@@ -1228,9 +1240,11 @@ What the suites pin down, beyond per-module unit tests:
   qdrant, the Qdrant path returns the brute-force results and scores when the
   collection finds them, a missed neighbour is missing without moving any other
   score, ties keep index order, the collection's vector size matches the store
-  dimension, it is rebuilt after `add`, and a missing package is a clear error.
-- **Red team** (`test_red_team.py`, LLM and NLI mocked, `FakeEmbedder`): the
-  defenses hold under attack — a fabricated figure and forged citations fail
+  dimension, it is rebuilt after `add`, two stores in one process get two
+  collections (so the second build cannot overwrite the first), and a missing
+  package or an unreachable server is a clear error.
+- **Red team: defenses** (`test_red_team.py`, LLM and NLI mocked, `FakeEmbedder`): the
+  defenses hold: a fabricated figure and forged citations fail
   `verify_answer`, below-threshold retrieval refuses before any LLM call, and an
   injected "reveal the system prompt" chunk stays sealed in one source fence.
 - **Re-ranker** (`test_rerank.py`, fake cross-encoder, no model loaded): off by

@@ -1,7 +1,7 @@
 """Opt-in LIVE red-team probe against the configured LLM provider.
 
 This is the behavioural counterpart to the offline suite in
-`tests/test_red_team.py`: it sends a handful of adversarial questions through the
+`tests/test_red_team.py`: it sends four adversarial questions through the
 real pipeline (retrieve -> answer_question with a live model) and prints a
 pass/fail report for two attack families the offline tests can only probe
 preventively:
