@@ -59,11 +59,21 @@ MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.6"))
 # approximate HNSW graph (rag/ann.py) for corpora far larger than the shipped
 # ones; scores are still exact cosines, but a passage the graph misses is
 # missing, so recall can drop. Needs `faiss-cpu` (requirements-optional.txt).
+# "qdrant" proposes candidates from a Qdrant collection the same way faiss does
+# (rag/qdrant_index.py); the store still scores and orders them with its exact
+# cosine, so only recall is approximate. Needs `qdrant-client`
+# (requirements-optional.txt) and a reachable Qdrant at QDRANT_URL.
 VECTOR_INDEX = os.getenv("VECTOR_INDEX", "numpy").strip().lower()
-if VECTOR_INDEX not in ("numpy", "faiss"):
-    raise ValueError(f"VECTOR_INDEX must be 'numpy' or 'faiss', got {VECTOR_INDEX!r}")
+if VECTOR_INDEX not in ("numpy", "faiss", "qdrant"):
+    raise ValueError(
+        f"VECTOR_INDEX must be 'numpy', 'faiss' or 'qdrant', got {VECTOR_INDEX!r}"
+    )
 # HNSW search beam: higher is slower and closer to exact.
 FAISS_EF_SEARCH = int(os.getenv("FAISS_EF_SEARCH", "64"))
+# Qdrant backend (VECTOR_INDEX=qdrant). URL of the running server and the name of
+# the collection the store's vectors are upserted into on the first search.
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "grounded_rag")
 # Optional cross-encoder re-ranker over the candidate pool that passed the gate,
 # before MMR and TOP_K (rag/rerank.py). "none" (default) is the pipeline every
 # published number was measured with; "cross_encoder" re-orders passages, so it

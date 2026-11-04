@@ -1,0 +1,247 @@
+# Kubernetes manifests for grounded-rag.
+# Ported from docker-compose.yml: app (Streamlit, 8501), api (uvicorn, 8002),
+# the one-shot ingest (index builder) as a Job, and the ollama sidecar (11434).
+# A single RAG app runs fine on Compose or a PaaS; k8s here is to practise the
+# objects (Deployment, Service, Job, PVC, Secret). See README.md.
+#
+# Secrets (API keys, formerly .env) come from a Secret named "rag-secrets".
+# Persistent storage mirrors the Compose named volumes rag_index and rag_logs,
+# plus ollama models. The corpus data is baked into the image (Compose mounted
+# ./data read-only); mount a read-only PVC instead if you keep corpora outside.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rag-index
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rag-logs
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rag-ollama-models
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 20Gi
+---
+# ---- ingest: build the index once, then exit (Compose profile "tools") ----
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rag-ingest
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: rag-ingest
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: ingest
+          image: siegried/grounded-rag:latest
+          command: ["python", "cli.py", "ingest", "--corpus", "ai_act_sections"]
+          envFrom:
+            - secretRef:
+                name: rag-secrets
+          volumeMounts:
+            - name: index
+              mountPath: /app/index
+            - name: logs
+              mountPath: /app/logs
+      volumes:
+        - name: index
+          persistentVolumeClaim:
+            claimName: rag-index
+        - name: logs
+          persistentVolumeClaim:
+            claimName: rag-logs
+---
+# ---- app: the Streamlit RAG UI ----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-app
+  labels:
+    app: rag-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-app
+  template:
+    metadata:
+      labels:
+        app: rag-app
+    spec:
+      containers:
+        - name: app
+          image: siegried/grounded-rag:latest
+          command:
+            - python
+            - -m
+            - streamlit
+            - run
+            - app.py
+            - --server.port=8501
+            - --server.address=0.0.0.0
+          ports:
+            - containerPort: 8501
+          env:
+            - name: OLLAMA_URL
+              value: "http://rag-ollama:11434"
+          envFrom:
+            - secretRef:
+                name: rag-secrets
+          volumeMounts:
+            - name: index
+              mountPath: /app/index
+            - name: logs
+              mountPath: /app/logs
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: index
+          persistentVolumeClaim:
+            claimName: rag-index
+        - name: logs
+          persistentVolumeClaim:
+            claimName: rag-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-app
+spec:
+  selector:
+    app: rag-app
+  ports:
+    - port: 8501
+      targetPort: 8501
+---
+# ---- api: the FastAPI JSON service (+ built React UI) ----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-api
+  labels:
+    app: rag-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-api
+  template:
+    metadata:
+      labels:
+        app: rag-api
+    spec:
+      containers:
+        - name: api
+          image: siegried/grounded-rag:latest
+          command:
+            - python
+            - -m
+            - uvicorn
+            - api.main:app
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8002"
+          ports:
+            - containerPort: 8002
+          env:
+            - name: OLLAMA_URL
+              value: "http://rag-ollama:11434"
+          envFrom:
+            - secretRef:
+                name: rag-secrets
+          volumeMounts:
+            - name: index
+              mountPath: /app/index
+            - name: logs
+              mountPath: /app/logs
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8002
+            initialDelaySeconds: 20
+            periodSeconds: 30
+      volumes:
+        - name: index
+          persistentVolumeClaim:
+            claimName: rag-index
+        - name: logs
+          persistentVolumeClaim:
+            claimName: rag-logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-api
+spec:
+  selector:
+    app: rag-api
+  ports:
+    - port: 8002
+      targetPort: 8002
+---
+# ---- ollama: bundled local LLM, with persistent model storage ----
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-ollama
+  labels:
+    app: rag-ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rag-ollama
+  template:
+    metadata:
+      labels:
+        app: rag-ollama
+    spec:
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          ports:
+            - containerPort: 11434
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: rag-ollama-models
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-ollama
+spec:
+  selector:
+    app: rag-ollama
+  ports:
+    - port: 11434
+      targetPort: 11434
