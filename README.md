@@ -320,7 +320,7 @@ account's credits: without any it answers 402 and the chain moves on.
 
 ## Tests
 
-`python -m pytest -q` — **445 passing** (plus 1 skipped without `faiss-cpu`; 446 with it), the whole suite offline (fake embedder,
+`python -m pytest -q` — **452 passing** (plus 1 skipped without `faiss-cpu`; 453 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations
@@ -370,8 +370,10 @@ all HTTP mocked). The count printed at the end is the current one.
   only the sampling interval. Numbers will move with the model.
 - **Brute-force NumPy search, one-shot generation**: fine at this scale, no multi-hop.
   An optional FAISS HNSW backend (`VECTOR_INDEX=faiss`, `requirements-optional.txt`)
-  sits behind the same `search` for much larger corpora; it is off by default and
-  no published number uses it.
+  and an optional Qdrant backend (`VECTOR_INDEX=qdrant`) sit behind the same
+  `search` for much larger corpora; both only propose candidate rows that the
+  store still scores with its exact cosine, both are off by default, and no
+  published number uses them.
 
 Details and roadmap: [technical deep dive](docs/technical_deep_dive.md).
 

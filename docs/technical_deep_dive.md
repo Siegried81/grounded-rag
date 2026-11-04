@@ -161,6 +161,17 @@ chunks, with score differences at most 3.6e-7 (float32 rounding). Two misses in
 878 is exactly why it stays off at this scale, where brute force is exact and
 fast. `faiss-cpu` is imported lazily and lives in `requirements-optional.txt`.
 
+**Second ANN backend (`rag/qdrant_index.py`, `VECTOR_INDEX=qdrant`, off by
+default).** For deployments that already run a Qdrant server or want the index
+outside the process, a Qdrant collection sits behind the same `store.search`
+with the identical contract: the collection holds unit-length copies of the
+stored vectors (point id `i` = row `i`, distance `DOT`, which on unit vectors is
+cosine), it is built and upserted lazily on the first search, and it only
+**proposes** rows that the store then scores and orders exactly as the FAISS and
+brute-force paths do. Only recall is approximate; the refusal threshold keeps
+the same meaning. It reads `QDRANT_URL` and `QDRANT_COLLECTION`, and
+`qdrant-client` is imported lazily and lives in `requirements-optional.txt`.
+
 ### 4.2 Keyword index (`rag/lexical.py`)
 
 A persisted BM25 (`rank_bm25`, Okapi) index over the same chunks, with a shared
@@ -1150,7 +1161,7 @@ Step-by-step commands: `docs/docker.md`.
 
 ## 12. Testing strategy
 
-**446 tests, all offline: 445 passing and 1 skipped without `faiss-cpu`, 446 passing with it.** The whole suite runs with:
+**453 tests, all offline: 452 passing and 1 skipped without `faiss-cpu`, 453 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1212,6 +1223,12 @@ What the suites pin down, beyond per-module unit tests:
   any other score, ties keep index order, the graph is rebuilt after `add`, and a
   missing package is a clear error. One test runs real FAISS (recall@10 ≥ 0.95 on
   3,000 random vectors, exact scores) and is skipped when it is not installed.
+- **Qdrant backend** (`test_qdrant_index.py`): with a stand-in `qdrant_client`
+  module (no server, package not required), the default path never touches
+  qdrant, the Qdrant path returns the brute-force results and scores when the
+  collection finds them, a missed neighbour is missing without moving any other
+  score, ties keep index order, the collection's vector size matches the store
+  dimension, it is rebuilt after `add`, and a missing package is a clear error.
 - **Re-ranker** (`test_rerank.py`, fake cross-encoder, no model loaded): off by
   default without importing `sentence-transformers`, it re-orders only the pool
   that passed the gate, never changes a score, cannot promote a passage below the
