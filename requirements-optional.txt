@@ -8,7 +8,10 @@ faiss-cpu>=1.8
 
 # VECTOR_INDEX=qdrant: approximate dense search backed by a Qdrant server
 # (rag/qdrant_index.py); also needs a reachable Qdrant at QDRANT_URL.
-qdrant-client>=1.9
+# >=1.12: the backend uses collection_exists/create_collection/query_points,
+# the current API (recreate_collection and search were dropped from recent
+# releases).
+qdrant-client>=1.12
 
 # Needed by two switches, each loading its own model on first use; pulls in
 # torch:

@@ -73,12 +73,19 @@ class QdrantIndex:
         self._client = None  # built on the first candidates() call
 
     def _ensure_ready(self) -> None:
-        """Connect, (re)create the collection and upsert the vectors, once."""
+        """Connect, (re)create the collection and upsert the vectors, once.
+
+        recreate_collection was dropped from recent qdrant-client, so this uses
+        the current API for the same effect: delete the collection if it exists,
+        then create it fresh, so it stays in step with the store's vectors.
+        """
         if self._client is not None:
             return
         QdrantClient, models = _load_qdrant()
         client = QdrantClient(url=self._url)
-        client.recreate_collection(
+        if client.collection_exists(self._collection):
+            client.delete_collection(self._collection)
+        client.create_collection(
             collection_name=self._collection,
             vectors_config=models.VectorParams(
                 size=self._dim, distance=models.Distance.DOT
@@ -106,9 +113,9 @@ class QdrantIndex:
         self._ensure_ready()
         q = _unit_rows(np.asarray(query_vec, dtype=np.float32).reshape(1, -1))[0]
         limit = min(self._n, max(top_k, self._ef_search))
-        hits = self._client.search(
+        response = self._client.query_points(
             collection_name=self._collection,
-            query_vector=q.tolist(),
+            query=q.tolist(),
             limit=limit,
         )
-        return [int(h.id) for h in hits if h.id is not None]
+        return [int(p.id) for p in response.points if p.id is not None]
