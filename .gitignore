@@ -6,6 +6,8 @@ __pycache__/
 # placeholder template is tracked.
 .env.*
 !.env.example
+# Streamlit's local secrets file holds the same keys; only its template is tracked.
+.streamlit/secrets.toml
 index/
 logs/
 .pytest_cache/

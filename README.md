@@ -270,7 +270,8 @@ one. Not exercised by CI: the first deploy is the test.
 
 **Streamlit Community Cloud**: deploy `app.py` from this repository and put the
 settings in the app's *Secrets* (Streamlit exports them as environment
-variables, which is how `config.py` reads them):
+variables, which is how `config.py` reads them). The same block, with comments,
+is in `.streamlit/secrets.toml.example`:
 
 ```toml
 EMBED_PROVIDER = "hosted"
