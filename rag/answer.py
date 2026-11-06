@@ -176,20 +176,23 @@ def _build_prompt(question: str, retrieved: list[Retrieved]) -> str:
 # Citation markers some models write instead of the asked-for [S1]. Seen from
 # gpt-oss on real answers: lenticular or full-width brackets ("【S1】", "［S1］"),
 # a suffix after the id ("【S2†L4-L9】"), Markdown bold inside the brackets
-# ("[**S1**]"), several ids in one bracket ("[**S1**, **S5**]", "[S1, S5]") and
-# zero-width spaces around the id. A bracket group counts as a citation only
-# when it holds nothing but source ids, so ordinary bracketed text is untouched.
+# ("[**S1**]"), several ids in one bracket ("[**S1**, **S5**]", "[S1, S5]"),
+# zero-width spaces around the id, and parentheses ("(S9)", "(S1, S5)"). A group
+# counts as a citation only when it holds nothing but source ids, so ordinary
+# bracketed or parenthesised text ("(see S1)", "(S-1)") is untouched. A group
+# opened with a parenthesis must close with one: "(S1]" is not a citation.
 _ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿]")
-_ID = r"\*{0,2}\s*S\d+\s*\*{0,2}(?:†[^\]】］,;]*)?"
-_CITATION_GROUP_RE = re.compile(rf"[\[【［]\s*{_ID}(?:\s*[,;]\s*{_ID})*\s*[\]】］]")
+_ID = r"\*{0,2}\s*S\d+\s*\*{0,2}(?:†[^\]】］)）,;]*)?"
+_IDS = rf"\s*{_ID}(?:\s*[,;]\s*{_ID})*\s*"
+_CITATION_GROUP_RE = re.compile(rf"[\[【［]{_IDS}[\]】］]|[(（]{_IDS}[)）]")
 _SOURCE_ID_RE = re.compile(r"S(\d+)")
 
 
 def normalize_citations(text: str) -> str:
     """Rewrite every citation form above to the canonical "[S1]" ("[S1][S5]" for groups).
 
-    The prompt asks for [S1], but gpt-oss often writes 【S1】, [**S1**] or a group
-    such as [S1, S5]. Left as is, verification sees no citation at all, so a
+    The prompt asks for [S1], but gpt-oss often writes 【S1】, [**S1**], (S9) or a
+    group such as [S1, S5]. Left as is, verification sees no citation at all, so a
     correctly cited answer is reported as uncited and ungrounded. Normalising
     here, where the answer is produced, gives the UI, verify and the evaluations
     one citation format; it changes how citations are counted, not what the

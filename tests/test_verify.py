@@ -166,6 +166,19 @@ def test_bold_grouped_and_zero_width_citations_are_recognised():
     assert extract_citations("Net sales [**S2**, **S1**].") == [2, 1]
 
 
+def test_parenthesised_citations_are_recognised():
+    """gpt-oss also cites as "(S9)" (route-or-roam agent sh08, 14 October run)."""
+    from rag.answer import normalize_citations
+
+    assert normalize_citations("Les pratiques prohibées (S9) et le texte (S1).") == \
+        "Les pratiques prohibées [S9] et le texte [S1]."
+    assert normalize_citations("Both (**S1**, S5) and （S2）.") == "Both [S1][S5] and [S2]."
+    assert extract_citations("Net sales rose (S2).") == [2]
+    # Ordinary parenthesised text and mismatched pairs are left alone.
+    for text in ("Article 5 (see S1 above)", "(S1]", "[S1)", "Form (S-1) filing", "(III)"):
+        assert normalize_citations(text) == text
+
+
 def test_abbreviations_do_not_end_a_sentence():
     from rag.verify import split_sentences
 

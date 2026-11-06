@@ -138,3 +138,17 @@ One dated entry per change that alters what a number or a verdict means. Append,
 - **Revisit if:** a deployment needs a fixed collection name per corpus (then a
   `QDRANT_COLLECTION_<CORPUS>` override), or the index dir name stops being the
   corpus name.
+
+## 2026-11-06: Parenthesised citations count as citations
+
+- **What:** `normalize_citations` (`rag/answer.py`) also rewrites "(S9)",
+  "(S1, S5)" and the full-width "（S2）" to `[S#]`. As with brackets, the group
+  must hold nothing but source ids, and a group opened with "(" must close with
+  ")": "(see S1)", "Form (S-1)" and "(S1]" stay as written.
+- **Why:** route-or-roam's agent answered sh08 correctly on 14 October but cited
+  as "(S9)" and "(S1)", so it was scored uncited. This is the same measurement
+  bug as the lenticular and bold forms (deep dive §6.3): the model was right,
+  the parser was not.
+- **What changes in the numbers:** citation counts, grounding and verify-ok can
+  only go up. Checked on every stored answer in both repos: one answer changes
+  (route-or-roam agent sh08). No corpus file contains "(S<digit>)".

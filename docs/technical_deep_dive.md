@@ -344,12 +344,19 @@ grounding score (computed over *cited* sources) collapsed to 0, and the answer w
 reported as failing. Roughly **half of the answers** in the first gpt-oss
 evaluation were affected: the measurement, not the model, was wrong.
 
-**The fix.** `answer.normalize_citations` rewrites any `【S<n>…】` or `［S<n>…］`
-marker to the canonical `[S<n>]`, keeping only the source number:
+**The fix.** `answer.normalize_citations` rewrites every group that holds
+nothing but source ids to the canonical `[S<n>]` (`[S1][S5]` for a group),
+keeping only the source numbers. It accepts lenticular, full-width and square
+brackets, parentheses (`(S9)`, closed by a parenthesis), Markdown bold, a `†`
+suffix and several ids separated by `,` or `;`:
 
 ```python
-_ALT_CITATION_RE = re.compile(r"[【［]\s*S(\d+)[^】］]*[】］]")
+_IDS = rf"\s*{_ID}(?:\s*[,;]\s*{_ID})*\s*"
+_CITATION_GROUP_RE = re.compile(rf"[\[【［]{_IDS}[\]】］]|[(（]{_IDS}[)）]")
 ```
+
+Ordinary text in brackets or parentheses ("(see S1)", "Form (S-1)", "[III]") is
+left alone, because a group must contain only ids.
 
 It is applied in two places, on purpose:
 
@@ -1173,7 +1180,7 @@ PVCs, a Secret) is in `k8s/`, with its own README.
 
 ## 12. Testing strategy
 
-**471 tests, all offline: 470 passing and 1 skipped without `faiss-cpu`, 471 passing with it.** The whole suite runs with:
+**472 tests, all offline: 471 passing and 1 skipped without `faiss-cpu`, 472 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
