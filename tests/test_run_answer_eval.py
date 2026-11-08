@@ -63,6 +63,7 @@ def harness(monkeypatch, tmp_path):
     monkeypatch.setattr(module.BM25Index, "load", staticmethod(lambda path: "bm25"))
     monkeypatch.setattr(module, "get_embedder", lambda: "embedder")
     monkeypatch.setattr(module, "retrieve", fake_retrieve)
+    monkeypatch.setattr(module, "top_dense_score", lambda question, store, embedder: 0.8)
     monkeypatch.setattr(rag.llm, "complete", fake_complete)
     module.eval_file, module.out = eval_file, tmp_path / "out.jsonl"
     module.retrieve_calls, module.llm_calls = retrieve_calls, llm_calls
@@ -221,3 +222,14 @@ def test_eval_file_requires_single_corpus(harness, monkeypatch):
     ])
     with pytest.raises(SystemExit):
         harness.main()
+
+
+def test_top_score_is_the_best_dense_cosine_not_the_first_fused_passage(harness, monkeypatch):
+    """The first passage after RRF and MMR scores 0.8; the gate saw a best cosine of 0.95."""
+    seen = []
+    monkeypatch.setattr(harness, "top_dense_score",
+                        lambda question, store, embedder: seen.append(question) or 0.95)
+    answered, _, gate = _main(harness, monkeypatch)
+    assert answered["top_score"] == 0.95
+    assert gate["top_score"] == 0.95  # a gate refusal still records how far below it was
+    assert len(seen) == 3

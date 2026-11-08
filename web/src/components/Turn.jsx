@@ -101,6 +101,19 @@ function Verification({ v }) {
           {t("invalidCitations", { list: v.invalid_citations.map((n) => `[S${n}]`).join(", ") })}
         </p>
       )}
+      {v.unsupported_numbers?.length > 0 && (
+        <p className="verify-issue">
+          {t("unsupportedNumbers", { list: v.unsupported_numbers.join(", ") })}
+        </p>
+      )}
+      {v.negation_mismatches?.length > 0 && (
+        <div className="verify-issue">
+          {t("negationMismatches")}
+          <ul>
+            {v.negation_mismatches.map((s, i) => <li key={i}>{s}</li>)}
+          </ul>
+        </div>
+      )}
       {v.uncited_sentences.length > 0 && (
         <div className="verify-issue">
           {t("uncitedClaims")}

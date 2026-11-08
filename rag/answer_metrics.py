@@ -61,7 +61,8 @@ How each measurement is defined, and why:
   compare a corpus with itself over time, not French against English.
 - Judge faithfulness (optional, off by default). One single LLM call per answer
   with a fixed 0-2 rubric returned as strict JSON; anything that does not parse
-  to 0, 1 or 2 is recorded as None and counted, never guessed.
+  to 0, 1 or 2 is recorded as None and counted, never guessed. A judge call
+  that failed is counted separately (`judge_errors`), not as unparsed.
 """
 
 from __future__ import annotations
@@ -341,7 +342,10 @@ def summarize(rows: list[dict]) -> dict:
     answerable = [r for r in ok if r["answerable"] and r.get("key_fact_recall") is not None]
     n_valid = sum(len(r["valid_citations"] or []) for r in answered)
     n_invalid = sum(len(r["invalid_citations"] or []) for r in answered)
-    judged = [r.get("judge_score") for r in answered if "judge_score" in r]
+    # A judge call that failed (provider outage) has no reply to parse: it is
+    # counted in judge_errors, not as an unparsed reply.
+    judged = [r.get("judge_score") for r in answered
+              if "judge_score" in r and not r.get("judge_error")]
     summary = {
         "n": len(ok),
         "n_errors": len(errors),
@@ -362,6 +366,7 @@ def summarize(rows: list[dict]) -> dict:
         ),
         "judge_mean": _mean([s for s in judged if s is not None]),
         "judge_unparsed": sum(1 for s in judged if s is None),
+        "judge_errors": sum(1 for r in answered if r.get("judge_error")),
     }
     return summary
 

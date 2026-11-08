@@ -152,3 +152,52 @@ One dated entry per change that alters what a number or a verdict means. Append,
 - **What changes in the numbers:** citation counts, grounding and verify-ok can
   only go up. Checked on every stored answer in both repos: one answer changes
   (route-or-roam agent sh08). No corpus file contains "(S<digit>)".
+
+## 2026-11-08: A citation written after the full stop cites the sentence before it
+
+- **What:** `rag/verify.py:split_sentences` moves citation markers that open a
+  fragment back to the sentence before it. "within 999 hours. [S1]" is now one
+  cited sentence, not an uncited claim followed by a lone "[S1]".
+- **Why:** gpt-oss writes this form in real answers (4 of the 40 in
+  `logs/answer_eval_results.jsonl`, aa-06 three times). The claim was read as
+  uncited, so its figures and negations were never checked: "999 hours. [S1]"
+  against a source saying 24 hours verified `ok` with no unsupported figure.
+  The NLI check skipped the same sentences.
+- **What changes in the numbers:** `uncited_sentences` gets shorter on such
+  answers, `unsupported_numbers` and `negation_mismatches` can get longer, so
+  `verify_ok` and `strict_ok` can move either way, and NLI checks more
+  sentences. The published tables are not re-run here.
+
+## 2026-11-08: `top_score` is the best dense cosine, the number the gate compares
+
+- **What:** `scripts/run_answer_eval.py` and the `cli.py ask` query log record
+  `rag.retrieve.top_dense_score` (best cosine over the whole store) instead of
+  the score of the first passage `retrieve` returned. Gate refusals now record
+  it too, where they used to log None.
+- **Why:** the docs call this "top cosine" and use it to show the 0.35
+  threshold never bites. In hybrid mode RRF and MMR re-order, so the first
+  passage had a lower cosine than the best match on 13 of the 40 eval
+  questions (by up to 0.066).
+- **What changes in the numbers:** re-measured with no LLM call, unanswerable
+  questions still span 0.599 to 0.888; answerable ones span 0.611 to 0.915
+  (was 0.910). The conclusion (the ranges overlap) holds.
+
+## 2026-11-08: The UIs say why an answer failed when the grounding bar was cleared
+
+- **What:** `/api/ask` adds `unsupported_numbers` and `negation_mismatches` to
+  `verification`, and both UIs list them. `ui.explain_grounding` bases the bar
+  verdict on the score alone and names the figure (or the invalid citation)
+  when `ok` is false anyway.
+- **Why:** an answer at 83% grounding with a fabricated figure was shown as
+  "issues found" with the caption "does not pass the 30% bar" and nothing
+  listed. The CLI already printed the figure.
+- **What changes in the numbers:** none. `ok` keeps its definition.
+
+## 2026-11-08: A failed judge call is not an unparsed judge reply
+
+- **What:** `summarize` leaves rows with `judge_error` out of `judge_unparsed`
+  and counts them in a new `judge_errors`, printed by the answer eval.
+- **Why:** a 429 on the judge was counted as a reply the parser rejected, which
+  read as the judge breaking its JSON contract.
+- **What changes in the numbers:** `judge_unparsed` can be lower than before
+  on runs with provider outages. `judge_mean` is unchanged.

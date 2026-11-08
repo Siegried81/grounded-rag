@@ -131,8 +131,9 @@ obligations of general-purpose model providers) failed the check. The retrieval
 and phrasing figures above, which call no LLM, reproduced to the third decimal.
 
 **Read the gate/model row before the Refusal F1.** The gate never fired: all 40
-rows of `logs/answer_eval_results.jsonl` have `gate_refused: false`, with top
-cosine scores from 0.599 to 0.910 against a 0.35 threshold. Every one of the 10
+rows of `logs/answer_eval_results.jsonl` have `gate_refused: false`. Their best
+dense cosine scores (`rag.retrieve.top_dense_score`, re-measured without the LLM)
+run from 0.599 to 0.915 against a 0.35 threshold. Every one of the 10
 refusals came from the model declining in its own words. Refusal F1 therefore
 measures the model's willingness to say "I don't know" — it is not evidence that
 the 0.35 threshold does anything. Both live scripts print the split for exactly
@@ -322,7 +323,7 @@ account's credits: without any it answers 402 and the chain moves on.
 
 ## Tests
 
-`python -m pytest -q` — **471 passing** (plus 1 skipped without `faiss-cpu`; 472 with it), the whole suite offline (fake embedder,
+`python -m pytest -q`: **482 passing** (plus 1 skipped without `faiss-cpu`; 483 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations
@@ -330,7 +331,7 @@ all HTTP mocked). The count printed at the end is the current one.
 - **A similarity threshold cannot detect a missing fact.** The gate has now fired
   **zero times over 61 live questions** (40 answer + 21 red-team), run three times. In the answer run
   the 12 unanswerable questions scored top-cosine **0.599–0.888**, and the 28
-  answerable ones **0.611–0.910**, against a threshold of 0.35: the two ranges
+  answerable ones **0.611–0.915**, against a threshold of 0.35: the two ranges
   overlap almost completely, so **no threshold value separates them**. That is a
   finding about the method, not a bug in the setting — the unanswerable questions
   are in-domain on purpose (which authority enforces the Act in France; what a

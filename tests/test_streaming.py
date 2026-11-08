@@ -267,3 +267,39 @@ def test_cli_stream_refusal_prints_the_refusal(monkeypatch, capsys):
     monkeypatch.setattr(llm, "stream", lambda *a, **k: pytest.fail("LLM must not run"))
     final = cli._print_streamed("q", [])
     assert capsys.readouterr().out.strip() == answer.REFUSAL_MESSAGE and final.refused
+
+
+def test_cli_ask_logs_the_best_dense_cosine_even_on_a_refusal(monkeypatch, tmp_path, capsys):
+    """The query log's top_score is the gate's number, so a refusal shows how far below it was."""
+    import argparse
+    import json as _json
+
+    import rag.embed
+    import rag.lexical
+    import rag.store
+
+    class Store:
+        model = None
+
+        def search(self, vec, k):
+            return [_r(1, 0.2)][:k]  # below the 0.35 gate
+
+    class Emb:
+        model = None
+
+        def embed(self, texts):
+            return [[1.0, 0.0] for _ in texts]
+
+    def no_bm25(path):
+        raise FileNotFoundError(path)
+
+    monkeypatch.setattr(rag.store.VectorStore, "load", staticmethod(lambda path: Store()))
+    monkeypatch.setattr(rag.lexical.BM25Index, "load", staticmethod(no_bm25))
+    monkeypatch.setattr(rag.embed, "get_embedder", lambda *a, **k: Emb())
+    monkeypatch.setattr(config, "SCORE_THRESHOLD", 0.35)
+    monkeypatch.setattr(config, "QUERY_LOG_PATH", tmp_path / "q.jsonl")
+    monkeypatch.setattr(rag.llm, "complete", lambda *a, **k: pytest.fail("LLM must not run"))
+    args = argparse.Namespace(corpus="demo", question=["weather?"], stream=False)
+    assert cli.cmd_ask(args) == 0
+    row = _json.loads((tmp_path / "q.jsonl").read_text(encoding="utf-8"))
+    assert row["refused"] is True and row["top_score"] == 0.2

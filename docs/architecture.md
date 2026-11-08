@@ -51,7 +51,7 @@ embedding model in `config.py`.
 
 **What the gate does not do.** Over 61 live questions, run three times, it has never fired. The
 unanswerable eval questions score 0.599–0.888 top cosine and the answerable ones
-0.611–0.910, so no threshold separates them: cosine measures whether a passage is
+0.611–0.915, so no threshold separates them: cosine measures whether a passage is
 *about* the question, and an unanswerable question about the corpus's own subject
 still is. What refuses in practice is the model following the "answer only from the
 sources" instruction. Both live reports therefore print `refusals: gate / model`

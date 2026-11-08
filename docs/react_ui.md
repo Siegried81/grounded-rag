@@ -92,7 +92,9 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
   `excerpt_html` is HTML-escaped server-side and only adds `<mark>` tags and
   `<a>` links on bare `http(s)` URLs (`target="_blank" rel="noopener noreferrer"`).
 - `verification`: `{ok, grounding_score, min_grounding, valid_citations,
-  invalid_citations, uncited_sentences, explanation, nli}`. Verification runs
+  invalid_citations, uncited_sentences, unsupported_numbers, negation_mismatches,
+  explanation, nli}`. `unsupported_numbers` alone can make `ok` false with the
+  grounding bar cleared; the explanation then names them. Verification runs
   outside the LLM error handling: a failure there is a bug to surface, not a
   provider outage. `nli` is `null` unless `NLI_CHECK=true`; then it is `{model,
   error, entailed_fraction, checked, contradicted[], sentences[]}` with, per cited
@@ -159,7 +161,7 @@ passages. `GET /api/config` reports `stream_answers` (`STREAM_ANSWERS`, default
 
 ## Tests
 
-`tests/test_api.py` — **45 tests** — drives the API with FastAPI's `TestClient`.
+`tests/test_api.py` (**46 tests**) drives the API with FastAPI's `TestClient`.
 The index, embedder and LLM are replaced by fakes, so it makes no network calls
 and needs no key. `tests/test_streaming.py` covers `/api/ask/stream` the same
 way. Both are part of the 430-test suite (`python -m pytest -q`; 1 of them
