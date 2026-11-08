@@ -231,3 +231,17 @@ def test_french_ui_texts_mirror_english():
     assert "aucun passage" in ui.explain_refusal(None, 0.35, lang="fr")
     assert "n'atteint pas" in ui.explain_grounding(0.1, 0.3, False, lang="fr")
     assert "atteint le seuil de 30%" in ui.explain_grounding(0.8, 0.3, True, lang="fr")
+
+
+def test_explain_grounding_names_the_figure_when_the_bar_is_passed_but_ok_is_not():
+    """83% clears a 30% bar: a failed verdict must say why, not that the bar was missed."""
+    text = ui.explain_grounding(0.83, 0.3, False, unsupported_numbers=["999"])
+    assert "does not pass" not in text and "passes the 30%" in text
+    assert "999" in text
+    fr = ui.explain_grounding(0.83, 0.3, False, lang="fr", unsupported_numbers=["999"])
+    assert "n'atteint pas" not in fr and "999" in fr
+
+
+def test_explain_grounding_keeps_the_bar_verdict_tied_to_the_score():
+    assert "does not pass" in ui.explain_grounding(0.1, 0.3, False, unsupported_numbers=[])
+    assert "invalid citation" in ui.explain_grounding(0.8, 0.3, False, unsupported_numbers=[])

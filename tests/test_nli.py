@@ -182,3 +182,11 @@ def test_stream_endpoint_reports_the_same_nli_as_ask(setup, client, monkeypatch)
     whole = client.post("/api/ask", json=req).json()["verification"]["nli"]
     assert streamed == whole
     assert streamed["checked"] == 1 and streamed["sentences"][0]["label"] == "contradiction"
+
+
+def test_a_citation_after_the_full_stop_is_still_checked():
+    sources = _sources()
+    checker = FakeChecker({})
+    report = nli.check_entailment("Logs are kept for six months. [S1]", sources, checker)
+    assert [p[1] for p in checker.pairs] == ["Logs are kept for six months."]
+    assert len(report.sentences) == 1

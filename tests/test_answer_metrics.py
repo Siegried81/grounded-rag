@@ -437,3 +437,16 @@ def test_answerable_facts_exist_in_gold_sources(corpus):
         for fact in it["key_facts"]:
             canonical = fact if isinstance(fact, str) else fact[0]
             assert any(key_fact_present(canonical, t) for t in texts), f"{it['id']}: {fact}"
+
+
+def test_a_judge_outage_is_counted_apart_from_an_unparsed_reply():
+    """A 429 on the judge call is not a reply the parser rejected."""
+    base = dict(answerable=True, refused=False, gate_refused=False, key_fact_recall=1.0,
+                valid_citations=[1], invalid_citations=[], grounding_score=0.9, verify_ok=True)
+    rows = [dict(base, id="a", judge_score=2),
+            dict(base, id="b", judge_score=None, judge_error="All LLM providers failed: groq: 429"),
+            dict(base, id="c", judge_score=None)]
+    s = summarize(rows)
+    assert s["judge_mean"] == 2.0
+    assert s["judge_unparsed"] == 1
+    assert s["judge_errors"] == 1

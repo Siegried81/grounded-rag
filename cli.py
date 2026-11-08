@@ -65,7 +65,7 @@ def cmd_ask(args) -> int:
     from rag.lexical import BM25Index
     from rag.logging_utils import log_query
     from rag.nli import check_entailment, format_nli, get_checker
-    from rag.retrieve import retrieve
+    from rag.retrieve import retrieve, top_dense_score
     from rag.store import VectorStore
     from rag.verify import format_report, verify_answer
 
@@ -100,7 +100,12 @@ def cmd_ask(args) -> int:
         if checker is not None:
             print(format_nli(check_entailment(answer.text, answer.sources, checker)))
 
-    top_score = retrieved[0].score if retrieved else None
+    # The gate's number (best dense cosine), recorded for refusals too, so the
+    # log can show how far below the threshold a refused question was.
+    try:
+        top_score = top_dense_score(question, store, embedder)
+    except Exception:  # noqa: BLE001 - logging must never fail the answer
+        top_score = None
     log_query(config.QUERY_LOG_PATH, question=question, corpus=args.corpus,
               n_retrieved=len(retrieved), top_score=top_score, refused=answer.refused)
     return 0

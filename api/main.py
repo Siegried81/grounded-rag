@@ -412,8 +412,13 @@ def _answered(out: dict, req: AskRequest, retrieved, text: str, elapsed: float) 
         "valid_citations": report.valid_citations,
         "invalid_citations": report.invalid_citations,
         "uncited_sentences": report.uncited_sentences,
+        # A figure absent from the cited passages makes `ok` False on its own,
+        # so the reader must see it; negations gate strict_ok only.
+        "unsupported_numbers": report.unsupported_numbers,
+        "negation_mismatches": report.negation_mismatches,
         "explanation": ui.explain_grounding(
-            report.grounding_score, config.VERIFY_MIN_GROUNDING, report.ok, lang=req.ui_lang
+            report.grounding_score, config.VERIFY_MIN_GROUNDING, report.ok, lang=req.ui_lang,
+            unsupported_numbers=report.unsupported_numbers,
         ),
         # null unless NLI_CHECK is on; reported beside `ok`, never changing it.
         "nli": nli_summary(text, retrieved),

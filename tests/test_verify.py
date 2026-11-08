@@ -293,3 +293,25 @@ def test_the_report_names_the_figures_and_the_negation():
     r = verify_answer("The seller must not respond within 999 hours [S1].", NUMERIC_SOURCES)
     text = format_report(r)
     assert "figures absent" in text and "999" in text and "negation" in text
+
+
+def test_a_citation_written_after_the_full_stop_belongs_to_that_sentence():
+    """gpt-oss often writes "... hours. [S1]": the marker must not become its own sentence."""
+    from rag.verify import split_sentences
+
+    assert split_sentences("Refunds take 24 hours. [S1] Logs are kept. [S2][S1]") == [
+        "Refunds take 24 hours. [S1]",
+        "Logs are kept. [S2][S1]",
+    ]
+
+
+def test_a_fabricated_figure_with_a_trailing_citation_still_fails():
+    r = verify_answer("The seller must respond within 999 hours. [S1]", NUMERIC_SOURCES)
+    assert r.unsupported_numbers == ["999"]
+    assert not r.ok
+    assert r.uncited_sentences == []
+
+
+def test_a_citation_alone_on_the_next_line_belongs_to_the_line_above():
+    r = verify_answer("The seller must respond within 999 hours.\n[S1]", NUMERIC_SOURCES)
+    assert r.unsupported_numbers == ["999"] and not r.ok

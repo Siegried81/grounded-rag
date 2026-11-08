@@ -183,3 +183,23 @@ def test_invalid_retrieval_mode_fails_at_import(monkeypatch):
         monkeypatch.setenv("RETRIEVAL_MODE", original)
         importlib.reload(config)
     assert config.RETRIEVAL_MODE == original
+
+
+def test_top_dense_score_is_the_cosine_the_gate_compares():
+    from rag.retrieve import top_dense_score
+
+    class Store:
+        def search(self, vec, k):
+            assert k == 1
+            return [Retrieved(Chunk("x", "t", "s", 0, "c"), 0.91)]
+
+    class Empty:
+        def search(self, vec, k):
+            return []
+
+    class Emb:
+        def embed(self, texts):
+            return [[1.0, 0.0]]
+
+    assert top_dense_score("q", Store(), Emb()) == 0.91
+    assert top_dense_score("q", Empty(), Emb()) is None

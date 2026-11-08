@@ -41,6 +41,12 @@ _ABBREV_END_RE = re.compile(
     r"|env|ex|mme|mlle)\.)$",
     re.IGNORECASE,
 )
+# Citation markers opening a fragment, with any punctuation right after them.
+# "24 hours. [S1] Logs are kept." splits into "24 hours." and "[S1] Logs are
+# kept.": the marker cites the sentence it follows, so it is moved back there.
+# Left in place, the claim read as uncited and its figures and negations were
+# never checked against any source.
+_LEADING_CITATIONS_RE = re.compile(r"(?:\s*\[S\d+\])+[\s.,;:]*")
 _MIN_CLAIM_WORDS = 4  # a sentence needs MORE than this many content words to count as a claim
 # A figure in the answer: digits with an optional decimal part. Thousand
 # separators (1,000 / 1 000 / 1.000, and the no-break spaces U+00A0 / U+202F that
@@ -163,6 +169,8 @@ def split_sentences(text: str) -> list[str]:
 
     Breaks after '.', '!' or '?' followed by whitespace, and on newlines, then
     glues back a fragment that ended with a known abbreviation (_ABBREV_END_RE).
+    Citation markers that open a fragment ("hours. [S1]") are attached to the
+    sentence before it, which is the one they cite.
     It is not linguistically perfect (an unknown abbreviation still over-splits)
     but is dependency-free and deterministic, which is enough for flagging
     uncited claims. Measurement note: fewer false splits means fewer, longer
@@ -173,6 +181,12 @@ def split_sentences(text: str) -> list[str]:
         if not part or not part.strip():
             continue
         part = part.strip()
+        lead = _LEADING_CITATIONS_RE.match(part)
+        if lead and out:
+            out[-1] = f"{out[-1]} {lead.group(0).strip()}"
+            part = part[lead.end():].strip()
+            if not part:
+                continue
         if out and _ABBREV_END_RE.search(out[-1]):
             out[-1] = f"{out[-1]} {part}"
         else:

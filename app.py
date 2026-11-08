@@ -312,13 +312,20 @@ def render_assistant(msg: dict) -> None:
             rep = msg["report"]
             badge = ":green-badge[verified]" if rep.ok else ":orange-badge[issues found]"
             st.markdown(f"{badge} grounding **{rep.grounding_score:.2f}**")
-            st.caption(ui.explain_grounding(rep.grounding_score, config.VERIFY_MIN_GROUNDING, rep.ok))
+            st.caption(ui.explain_grounding(rep.grounding_score, config.VERIFY_MIN_GROUNDING, rep.ok,
+                                            unsupported_numbers=rep.unsupported_numbers))
             render_nli(msg.get("nli"))
             if rep.invalid_citations:
                 st.markdown(
                     "Invalid citations (no such source): "
                     + ", ".join(f"[S{n}]" for n in rep.invalid_citations)
                 )
+            if rep.unsupported_numbers:
+                st.markdown("Figures absent from the cited passages: "
+                            + ", ".join(rep.unsupported_numbers))
+            if rep.negation_mismatches:
+                st.markdown("Negations the cited passages do not carry:")
+                st.markdown("\n".join(f"- {s}" for s in rep.negation_mismatches))
             if rep.uncited_sentences:
                 st.markdown("Claims without a citation:")
                 st.markdown("\n".join(f"- {s}" for s in rep.uncited_sentences))

@@ -139,3 +139,16 @@ def retrieve(
             ranked = diversified
 
     return ranked[:top_k]
+
+
+def top_dense_score(question: str, store, embedder) -> float | None:
+    """Best dense cosine of `question` over the whole store, or None for an empty store.
+
+    This is the number the refusal gate compares with the threshold. The first
+    passage `retrieve` returns is not it: RRF and MMR re-order, so in hybrid
+    mode that passage often has a lower cosine than the best match. Threshold
+    analysis needs this value, and it is also what the UIs show on a refusal.
+    Costs one extra query embedding.
+    """
+    best = store.search(embedder.embed([question])[0], 1)
+    return best[0].score if best else None

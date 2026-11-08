@@ -319,24 +319,48 @@ def _explain_refusal_fr(best_score: float | None, threshold: float) -> str:
     )
 
 
-def explain_grounding(score: float, min_grounding: float, ok: bool, lang: str = "en") -> str:
+def explain_grounding(score: float, min_grounding: float, ok: bool, lang: str = "en",
+                      unsupported_numbers: list[str] | None = None) -> str:
     """One line saying what the grounding score measures and whether it passed.
 
+    The bar verdict follows the score alone. `ok` can still be False with the
+    bar cleared, because of an invalid citation or a figure absent from the
+    cited passages; that reason is then named, so "83%, does not pass the 30%
+    bar" can no longer be shown. `unsupported_numbers` comes from the
+    VerificationReport; None means the caller does not know them.
     `lang="fr"` returns it in French; anything else returns English.
     """
+    passed_bar = score >= min_grounding
+    figures = ", ".join(unsupported_numbers or [])
     if lang == "fr":
-        verdict = "atteint" if ok else "n'atteint pas"
-        return (
+        verdict = "atteint" if passed_bar else "n'atteint pas"
+        text = (
             f"{score:.0%} des mots porteurs de sens de la réponse figurent dans les passages "
             f"qu'elle cite ({verdict} le seuil de {min_grounding:.0%}, et chaque citation doit "
             "exister). C'est un contrôle lexical, pas une preuve que le sens est préservé."
         )
-    verdict = "passes" if ok else "does not pass"
-    return (
+        if not ok and passed_bar:
+            if figures:
+                text += f" Échec malgré tout : chiffres absents des passages cités : {figures}."
+            elif unsupported_numbers is not None:
+                text += " Échec malgré tout : une citation ne renvoie à aucune source."
+            else:
+                text += " Échec malgré tout : voir les problèmes listés."
+        return text
+    verdict = "passes" if passed_bar else "does not pass"
+    text = (
         f"{score:.0%} of the answer's content words appear in the passages it cites "
         f"({verdict} the {min_grounding:.0%} bar, and every citation must exist). "
         "It is a lexical check, not proof the meaning is preserved."
     )
+    if not ok and passed_bar:
+        if figures:
+            text += f" It fails anyway: figures absent from the cited passages: {figures}."
+        elif unsupported_numbers is not None:
+            text += " It fails anyway: an invalid citation points to no source."
+        else:
+            text += " It fails anyway: see the issues listed."
+    return text
 
 
 def build_limitations(

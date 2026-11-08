@@ -668,7 +668,7 @@ as refusals, for the same reasons.
   scripts print the split for that reason; how a refusal is detected is unchanged.
 - **No threshold value could have done better, and that is the finding.** The 12
   unanswerable questions scored top cosine **0.599–0.888**; the 28 answerable ones
-  **0.611–0.910**. The ranges overlap over almost their whole length, so there is
+  **0.611–0.915**. The ranges overlap over almost their whole length, so there is
   no cut-off that admits the answerable set and rejects the unanswerable one — and
   that is not a tuning failure. The unanswerable questions are *in domain by
   construction* (which authority enforces the Act in France, what a conformity
@@ -1180,7 +1180,7 @@ PVCs, a Secret) is in `k8s/`, with its own README.
 
 ## 12. Testing strategy
 
-**472 tests, all offline: 471 passing and 1 skipped without `faiss-cpu`, 472 passing with it.** The whole suite runs with:
+**483 tests, all offline: 482 passing and 1 skipped without `faiss-cpu`, 483 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1210,7 +1210,7 @@ What the suites pin down, beyond per-module unit tests:
   `1m2.5s`, `250ms`), all-keys-limited → one capped wait → retry, the cap and the
   0 = disabled switch, no wait on a non-429 failure, cache hit on an identical
   request, cache miss when the model changes, failures never cached.
-- **Answer metrics** (`test_answer_metrics.py`, 78 tests): refusal detection in
+- **Answer metrics** (`test_answer_metrics.py`, 79 tests): refusal detection in
   EN/FR including the partial-answer rule, `None` on empty denominators, numeric
   fact matching across groupings, scales and French decimals, judge-reply parsing.
 - **Red team: harness** (`test_redteam.py`): an out-of-scope case refuses before any LLM
@@ -1323,7 +1323,7 @@ what it says, evaluations measure how well the system behaves with a real model.
   central negative result, and it is stronger than "the gate does not catch
   in-domain gaps". Over **61 live questions** (§8.2 and §8.3), run three times, the 0.35 gate has
   fired **zero times**. In the answer run the 12 unanswerable questions scored top
-  cosine **0.599–0.888** and the 28 answerable ones **0.611–0.910**: the
+  cosine **0.599–0.888** and the 28 answerable ones **0.611–0.915**: the
   distributions overlap over nearly their whole range, so **no value of
   `SCORE_THRESHOLD` separates the two classes**. This is not a mistuned constant.
   Cosine similarity expresses "is this passage about the question's topic?", and
@@ -1368,7 +1368,7 @@ fired **0 times over 61 live questions run three times**, so the refusal F1 of 0
 *model's* willingness to decline and is no evidence that `SCORE_THRESHOLD = 0.35`
 works. The reason it cannot be fixed by moving the threshold is in the same
 section: the unanswerable questions' top cosine scores span **0.599–0.888** and
-the answerable ones **0.611–0.910**. The two distributions overlap almost
+the answerable ones **0.611–0.915**. The two distributions overlap almost
 completely, so *no* value of a single scalar threshold separates them.
 
 There is a published result that says this is the general case rather than this

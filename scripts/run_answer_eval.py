@@ -51,7 +51,7 @@ from rag.embed import get_embedder  # noqa: E402
 from rag.lexical import BM25Index  # noqa: E402
 from rag.logging_utils import never_crash_on_console_encoding  # noqa: E402
 from rag.nli import nli_summary  # noqa: E402
-from rag.retrieve import retrieve  # noqa: E402
+from rag.retrieve import retrieve, top_dense_score  # noqa: E402
 from rag.stats import wilson  # noqa: E402
 from rag.store import VectorStore  # noqa: E402
 from scripts.run_eval import load_eval  # noqa: E402
@@ -182,7 +182,9 @@ def evaluate_item(item: dict, corpus: str, store, bm25, embedder, k: int, mode: 
     # entail. This is what lets the answer eval measure NLI against the key-fact
     # and judge verdicts (docs §8.2, §14).
     row["nli"] = None if answer.refused else nli_summary(answer.text, answer.sources)
-    row["top_score"] = retrieved[0].score if retrieved else None
+    # The best dense cosine, which is what the gate compared with the threshold;
+    # retrieved[0] is the first passage after fusion and MMR, often a lower one.
+    row["top_score"] = top_dense_score(item["question"], store, embedder)
     # A gate refusal made no LLM call, so no provider answered.
     row["provider"] = None if answer.refused else rag.llm.last_provider()
     row["diagnosis"] = diagnose(row)
@@ -221,7 +223,8 @@ def print_summary(summaries: dict[str, dict], judge: bool) -> None:
     rows = list(_SUMMARY_ROWS)
     if judge:
         rows += [("judge faithfulness (0-2)", "judge_mean", ".2f"),
-                 ("judge unparsed", "judge_unparsed", "d")]
+                 ("judge unparsed", "judge_unparsed", "d"),
+                 ("judge errors (excluded)", "judge_errors", "d")]
     for label, key, spec in rows:
         if isinstance(key, tuple):
             cells = [f"{s[key[0]]}/{s[key[1]]}" for s in summaries.values()]
