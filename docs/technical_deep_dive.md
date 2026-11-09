@@ -174,8 +174,9 @@ threshold keeps the same meaning. Each store gets its own collection, named
 `grounded_rag_filings_sections`): the API and the Streamlit app load one store
 per corpus in one process, and with a single shared collection the second
 store's build replaced the first's points, so point id `i` landed on the wrong
-store's row `i` (see `docs/decisions.md`, 2026-11-04). It reads `QDRANT_URL`
-and `QDRANT_COLLECTION` (a prefix), and `qdrant-client` is imported lazily and
+store's row `i` (see `docs/decisions.md`, 2026-11-04). It reads `QDRANT_URL`,
+`QDRANT_COLLECTION` (a prefix) and `QDRANT_API_KEY` (sent only when set, for
+Qdrant Cloud), and `qdrant-client` is imported lazily and
 lives in `requirements-optional.txt`.
 
 ### 4.2 Keyword index (`rag/lexical.py`)
@@ -1180,7 +1181,7 @@ PVCs, a Secret) is in `k8s/`, with its own README.
 
 ## 12. Testing strategy
 
-**483 tests, all offline: 482 passing and 1 skipped without `faiss-cpu`, 483 passing with it.** The whole suite runs with:
+**485 tests, all offline: 484 passing and 1 skipped without `faiss-cpu`, 485 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1248,8 +1249,9 @@ What the suites pin down, beyond per-module unit tests:
   collection finds them, a missed neighbour is missing without moving any other
   score, ties keep index order, the collection's vector size matches the store
   dimension, it is rebuilt after `add`, two stores in one process get two
-  collections (so the second build cannot overwrite the first), and a missing
-  package or an unreachable server is a clear error.
+  collections (so the second build cannot overwrite the first), `QDRANT_API_KEY`
+  reaches the client only when it is set, and a missing package or an
+  unreachable server is a clear error.
 - **Red team: defenses** (`test_red_team.py`, LLM and NLI mocked, `FakeEmbedder`): the
   defenses hold: a fabricated figure and forged citations fail
   `verify_answer`, below-threshold retrieval refuses before any LLM call, and an

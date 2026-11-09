@@ -74,6 +74,9 @@ FAISS_EF_SEARCH = int(os.getenv("FAISS_EF_SEARCH", "64"))
 # the collection the store's vectors are upserted into on the first search.
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "grounded_rag")
+# API key for a managed server (Qdrant Cloud). Empty means no key is sent, which
+# is what a local server started without one expects.
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
 # Optional cross-encoder re-ranker over the candidate pool that passed the gate,
 # before MMR and TOP_K (rag/rerank.py). "none" (default) is the pipeline every
 # published number was measured with; "cross_encoder" re-orders passages, so it

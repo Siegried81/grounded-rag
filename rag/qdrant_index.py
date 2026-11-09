@@ -21,6 +21,9 @@ the vectors, which is cosine, the same trick as `rag/ann.py`. Vectors are
 upserted lazily on the first search, not in the constructor, so a store that is
 never searched through Qdrant never touches the server.
 
+`QDRANT_API_KEY` is sent only when it is set: Qdrant Cloud requires it, and a
+local server started without a key accepts requests that carry none.
+
 `qdrant_client` is imported lazily: the default install does not have it, and
 this module must import (and the test suite run) without it.
 """
@@ -62,12 +65,14 @@ class QdrantIndex:
     """
 
     def __init__(self, vectors: np.ndarray, url: str | None = None,
-                 collection: str | None = None, ef_search: int | None = None):
+                 collection: str | None = None, ef_search: int | None = None,
+                 api_key: str | None = None):
         """Record `vectors` (n x d); defer the client and upsert to the first search."""
         self._unit = np.ascontiguousarray(_unit_rows(np.asarray(vectors, dtype=np.float32)))
         self._n = self._unit.shape[0]
         self._dim = int(self._unit.shape[1]) if self._unit.ndim == 2 else 0
         self._url = url or config.QDRANT_URL
+        self._api_key = api_key or config.QDRANT_API_KEY or None
         self._collection = collection or config.QDRANT_COLLECTION
         # Reuse the HNSW search beam knob so the two ANN backends widen the beam
         # the same way; the store rescores and cuts the result regardless.
@@ -88,7 +93,7 @@ class QdrantIndex:
         if self._client is not None:
             return
         QdrantClient, models = _load_qdrant()
-        client = QdrantClient(url=self._url)
+        client = QdrantClient(url=self._url, api_key=self._api_key)
         try:
             exists = client.collection_exists(self._collection)
         except Exception as exc:
