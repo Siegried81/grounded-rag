@@ -46,12 +46,13 @@ def _fake_qdrant(propose=None, collection_exists=None):
 
     `propose(rows)` filters the rows a search returns, to imitate a collection
     that misses some neighbours. `collection_exists`, when given, replaces the
-    client's method, so a test can make the first server call raise. Records
+    client's method, so a test can make the first server call raise. Keeps each
+client it builds in `module.clients`, so a test can read the key it got. Records
     every created collection in `module.built` so a test can count how often the
     index is (re)built, and keeps all points in `module.server`, keyed by
     collection name and shared by every client, like one real server.
     """
-    module = types.SimpleNamespace(built=[], server={})
+    module = types.SimpleNamespace(built=[], server={}, clients=[])
 
     class _Models:
         class Distance:
@@ -72,8 +73,10 @@ def _fake_qdrant(propose=None, collection_exists=None):
             self.id = id
 
     class QdrantClient:
-        def __init__(self, url=None):
+        def __init__(self, url=None, api_key=None):
             self.url = url
+            self.api_key = api_key
+            module.clients.append(self)
 
         def collection_exists(self, collection_name):
             if collection_exists is not None:
@@ -222,3 +225,23 @@ def test_unreachable_server_is_a_clear_error(monkeypatch):
     store, vecs = _store(n=10)
     with pytest.raises(RuntimeError, match="not reachable at http://qdrant.test:6333.*VECTOR_INDEX=numpy"):
         store.search(vecs[0].tolist(), 3)
+
+
+def test_api_key_is_sent_when_set(monkeypatch):
+    module = _fake_qdrant()
+    _install(monkeypatch, module)
+    monkeypatch.setattr(config, "VECTOR_INDEX", "qdrant")
+    monkeypatch.setattr(config, "QDRANT_API_KEY", "secret-key")
+    store, vecs = _store(n=10)
+    store.search(vecs[0].tolist(), 3)
+    assert [c.api_key for c in module.clients] == ["secret-key"]
+
+
+def test_no_api_key_is_sent_to_a_local_server(monkeypatch):
+    module = _fake_qdrant()
+    _install(monkeypatch, module)
+    monkeypatch.setattr(config, "VECTOR_INDEX", "qdrant")
+    monkeypatch.setattr(config, "QDRANT_API_KEY", "")
+    store, vecs = _store(n=10)
+    store.search(vecs[0].tolist(), 3)
+    assert [c.api_key for c in module.clients] == [None]

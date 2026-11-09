@@ -323,7 +323,7 @@ account's credits: without any it answers 402 and the chain moves on.
 
 ## Tests
 
-`python -m pytest -q`: **482 passing** (plus 1 skipped without `faiss-cpu`; 483 with it), the whole suite offline (fake embedder,
+`python -m pytest -q`: **484 passing** (plus 1 skipped without `faiss-cpu`; 485 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations
