@@ -60,3 +60,9 @@ def test_load_missing_file(tmp_path):
     """Loading a missing file raises a clear FileNotFoundError."""
     with pytest.raises(FileNotFoundError, match="BM25 index file not found"):
         BM25Index.load(tmp_path / "nope.json")
+
+
+def test_search_labels_hits_as_bm25():
+    """A raw BM25 score is never passed off as a cosine."""
+    res = BM25Index.build(CHUNKS).search("revenue", top_k=3)
+    assert res and all(r.score_source == "bm25" for r in res)

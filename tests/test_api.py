@@ -127,6 +127,7 @@ def test_ask_answer_path(setup, client, monkeypatch):
     assert body["settings"]["mode"] == "dense"  # no BM25 index -> dense, as app.py offers
     s1, s2 = body["sources"]
     assert s1["sid"] == 1 and s1["cited"] is True and s1["page"] == 3
+    assert s1["score"] == 0.9 and s1["score_source"] == "dense"
     assert s1["location"] == "doc1.txt · p.3"
     assert s2["cited"] is False
     assert "<mark>" in s1["excerpt_html"]

@@ -32,10 +32,18 @@ class Chunk:
 
 @dataclass(frozen=True)
 class Retrieved:
-    """A chunk paired with its cosine similarity to the query (1.0 == identical)."""
+    """A chunk paired with its cosine similarity to the query (1.0 == identical).
+
+    `score_source` says which channel found the chunk: "dense", "bm25" or
+    "both". In hybrid mode `retrieve` gives a BM25-only hit its dense cosine
+    too, so `score` is a cosine either way. Two exceptions keep a raw BM25
+    score: `BM25Index.search` itself, and a hit from a store that can't hand
+    back vectors (a test fake).
+    """
 
     chunk: Chunk
     score: float
+    score_source: str = "dense"
 
 
 @runtime_checkable

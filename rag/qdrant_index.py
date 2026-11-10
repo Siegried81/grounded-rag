@@ -75,7 +75,7 @@ class QdrantIndex:
         self._api_key = api_key or config.QDRANT_API_KEY or None
         self._collection = collection or config.QDRANT_COLLECTION
         # Reuse the HNSW search beam knob so the two ANN backends widen the beam
-        # the same way; the store rescores and cuts the result regardless.
+        # the same way: passed as SearchParams.hnsw_ef in candidates().
         self._ef_search = ef_search or config.FAISS_EF_SEARCH
         self._client = None  # built on the first candidates() call
 
@@ -122,18 +122,21 @@ class QdrantIndex:
     def candidates(self, query_vec, top_k: int) -> list[int]:
         """Row numbers Qdrant proposes for `query_vec`, at least `top_k` of them when it can.
 
-        Asks for max(top_k, ef_search) neighbours, so the list is never narrower
-        than the search beam; the caller scores and cuts it. Same contract as
-        `FaissIndex.candidates()`.
+        The HNSW beam width goes to Qdrant as `SearchParams(hnsw_ef=ef_search)`,
+        the knob that sets recall; `limit` is only how many results come back,
+        so it is `top_k` (Qdrant widens the beam to `limit` itself when
+        `limit > hnsw_ef`). The caller scores and cuts the list. Same contract
+        as `FaissIndex.candidates()`.
         """
         if self._n == 0 or top_k <= 0:
             return []
         self._ensure_ready()
+        _, models = _load_qdrant()
         q = _unit_rows(np.asarray(query_vec, dtype=np.float32).reshape(1, -1))[0]
-        limit = min(self._n, max(top_k, self._ef_search))
         response = self._client.query_points(
             collection_name=self._collection,
             query=q.tolist(),
-            limit=limit,
+            limit=min(self._n, top_k),
+            search_params=models.SearchParams(hnsw_ef=self._ef_search),
         )
         return [int(p.id) for p in response.points if p.id is not None]

@@ -26,6 +26,9 @@ function SourceCard({ src, domId, flash, onOpenDocument }) {
         <span className="src-score" title={t("scoreTitle")}>
           {t("score")} {src.score.toFixed(3)}
         </span>
+        {src.score_source === "bm25" && (
+          <span className="src-page" title={t("keywordsOnlyTitle")}>{t("keywordsOnly")}</span>
+        )}
         {src.cited && <span className="src-cited">{t("cited")}</span>}
       </header>
       {/* excerpt_html is escaped server-side by ui.highlight_and_linkify; only <mark>

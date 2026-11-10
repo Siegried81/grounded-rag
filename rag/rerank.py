@@ -8,7 +8,7 @@ corpus, so it only re-orders the pool retrieval already built — after the
 refusal gate, before MMR and the `TOP_K` cut.
 
 It never touches the gate: a passage's displayed `score` stays its dense cosine
-(or BM25 score for a keyword-only hit), and the cross-encoder score only decides
+(a BM25-only hit included), and the cross-encoder score only decides
 the ORDER. So a refusal means exactly what it meant before; what changes is
 which of the admitted passages reach the model. That changes answers, hence
 off by default.
@@ -69,8 +69,8 @@ def rerank(question: str, ranked: list, reranker) -> tuple[list, dict[str, float
     """Re-order `ranked` (Retrieved items) by cross-encoder score; also return the scores by id.
 
     Ties keep their incoming order (Python's sort is stable), so equal scores
-    leave the fused ranking as it was. The returned scores feed MMR's
-    relevance term in place of the fused or dense one.
+    leave the fused ranking as it was. The returned scores, min-max rescaled,
+    are MMR's relevance term in place of the fused or dense one.
     """
     scores = reranker.score(question, [r.chunk.text for r in ranked])
     by_id = {r.chunk.id: s for r, s in zip(ranked, scores)}

@@ -134,6 +134,9 @@ def _require_corpus(corpus: str) -> None:
 def _source_dict(index: int, r, terms: list[str], cited: list[int]) -> dict:
     """One passage as JSON: label, score, plain + highlighted excerpt, cited flag.
 
+    `score` is the dense cosine; `score_source` says which channel found the
+    passage ("dense", "bm25" or "both"), see `rag.types.Retrieved`.
+
     `excerpt_html` comes from `ui.highlight_and_linkify`, which escapes the passage
     before adding <mark> tags and http(s) links, so it is safe to inject as HTML in
     the browser.
@@ -145,6 +148,7 @@ def _source_dict(index: int, r, terms: list[str], cited: list[int]) -> dict:
         "page": (r.chunk.meta or {}).get("page"),
         "location": ui.format_location(r.chunk.source, r.chunk.meta),
         "score": round(float(r.score), 4),
+        "score_source": getattr(r, "score_source", "dense"),
         "excerpt": excerpt,
         "excerpt_html": ui.highlight_and_linkify(excerpt, terms),
         "cited": index in cited,

@@ -52,7 +52,7 @@ client it builds in `module.clients`, so a test can read the key it got. Records
     index is (re)built, and keeps all points in `module.server`, keyed by
     collection name and shared by every client, like one real server.
     """
-    module = types.SimpleNamespace(built=[], server={}, clients=[])
+    module = types.SimpleNamespace(built=[], server={}, clients=[], queries=[])
 
     class _Models:
         class Distance:
@@ -67,6 +67,11 @@ client it builds in `module.clients`, so a test can read the key it got. Records
             def __init__(self, id, vector):
                 self.id = id
                 self.vector = vector
+
+        class SearchParams:
+            def __init__(self, hnsw_ef=None, exact=False):
+                self.hnsw_ef = hnsw_ef
+                self.exact = exact
 
     class _Hit:
         def __init__(self, id):
@@ -94,7 +99,8 @@ client it builds in `module.clients`, so a test can read the key it got. Records
             for p in points:
                 module.server[collection_name][p.id] = np.asarray(p.vector, dtype=np.float32)
 
-        def query_points(self, collection_name, query, limit):
+        def query_points(self, collection_name, query, limit, search_params=None):
+            module.queries.append({"limit": limit, "search_params": search_params})
             points = module.server[collection_name]
             ids = sorted(points)
             data = np.stack([points[i] for i in ids])
@@ -245,3 +251,16 @@ def test_no_api_key_is_sent_to_a_local_server(monkeypatch):
     store, vecs = _store(n=10)
     store.search(vecs[0].tolist(), 3)
     assert [c.api_key for c in module.clients] == [None]
+
+
+def test_ef_search_reaches_qdrant_as_hnsw_ef_and_limit_is_top_k(monkeypatch):
+    """The beam width is Qdrant's hnsw_ef search parameter, not a larger limit."""
+    module = _fake_qdrant()
+    _install(monkeypatch, module)
+    monkeypatch.setattr(config, "VECTOR_INDEX", "qdrant")
+    monkeypatch.setattr(config, "FAISS_EF_SEARCH", 64)
+    store, vecs = _store(n=200)
+    store.search(vecs[0].tolist(), 5)
+    (query,) = module.queries
+    assert query["limit"] == 5
+    assert query["search_params"].hnsw_ef == 64

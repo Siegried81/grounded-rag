@@ -252,6 +252,8 @@ def render_sources(sources, question: str, cited: list[int], title: str) -> None
     for i, r in enumerate(sources, 1):
         is_cited = i in cited
         flag = " · cited" if is_cited else ""
+        if getattr(r, "score_source", "dense") == "bm25":
+            flag = " · keywords only" + flag
         body = ui.highlight_and_linkify(ui.snippet(r.chunk.text, terms), terms)
         st.markdown(
             f'<div class="src{" cited" if is_cited else ""}">'
@@ -262,8 +264,9 @@ def render_sources(sources, question: str, cited: list[int], title: str) -> None
         )
         render_document_expander(r.chunk.corpus, r.chunk.source, terms)
     st.caption(
-        "Score = cosine similarity to the question (1.0 = identical). In hybrid mode a "
-        "passage found only by keywords shows its BM25 score instead."
+        "Score = cosine similarity to the question (1.0 = identical). In hybrid mode, "
+        "\"keywords only\" means BM25 found the passage and the dense search didn't, "
+        "so its cosine can be low."
     )
 
 
