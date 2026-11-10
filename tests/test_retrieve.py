@@ -104,6 +104,60 @@ def test_hybrid_fuses_bm25_keyword_only_hit():
     assert "1" in ids and "9" in ids  # fusion surfaces the keyword-only passage
 
 
+class StoreWithoutVectors:
+    """A store that can search but can't hand back vectors."""
+
+    def __init__(self, results):
+        self.results = results
+
+    def search(self, query_vec, top_k):
+        return self.results
+
+
+def _channels(out):
+    return {r.chunk.id: (round(r.score, 4), r.score_source) for r in out}
+
+
+def test_hybrid_bm25_only_hit_shows_its_dense_cosine_not_its_bm25_score():
+    # Query vector is [0.1, 0.2, 0.3]; id 9's stored vector points the same way.
+    store = FakeStore([_r(1, 0.9)], vectors={"1": [1.0, 0.0, 0.0], "9": [1.0, 2.0, 3.0]})
+    bm25 = FakeBM25([_r(9, 7.5)])
+    out = retrieve("q", store, FakeEmbedder(), top_k=5, threshold=0.5, bm25=bm25,
+                   mode="hybrid", use_mmr=False)
+    assert _channels(out) == {"1": (0.9, "dense"), "9": (1.0, "bm25")}
+
+
+def test_hybrid_labels_a_passage_both_channels_found_as_both():
+    store = FakeStore([_r(1, 0.9), _r(2, 0.8)])
+    bm25 = FakeBM25([_r(2, 4.0)])
+    out = retrieve("q", store, FakeEmbedder(), top_k=5, threshold=0.5, bm25=bm25,
+                   mode="hybrid", use_mmr=False)
+    assert _channels(out) == {"1": (0.9, "dense"), "2": (0.8, "both")}
+
+
+def test_bm25_only_hit_below_the_threshold_still_gets_in_with_its_low_cosine():
+    # No per-passage cosine gate for BM25 hits: they're there to catch exact
+    # terms (an article number) that embeddings miss. The cosine shows it.
+    store = FakeStore([_r(1, 0.9), _r(3, 0.1)])
+    bm25 = FakeBM25([_r(3, 9.0)])
+    out = retrieve("q", store, FakeEmbedder(), top_k=5, threshold=0.5, bm25=bm25,
+                   mode="hybrid", use_mmr=False)
+    assert _channels(out) == {"1": (0.9, "dense"), "3": (0.1, "bm25")}
+
+
+def test_bm25_only_hit_keeps_its_raw_score_when_the_store_has_no_vectors():
+    out = retrieve("q", StoreWithoutVectors([_r(1, 0.9)]), FakeEmbedder(), top_k=5,
+                   threshold=0.5, bm25=FakeBM25([_r(9, 7.5)]), mode="hybrid", use_mmr=False)
+    assert _channels(out)["9"] == (7.5, "bm25")
+
+
+def test_dense_mode_labels_every_passage_dense():
+    store = FakeStore([_r(1, 0.9), _r(2, 0.8)])
+    out = retrieve("q", store, FakeEmbedder(), top_k=5, threshold=0.5,
+                   bm25=FakeBM25([_r(2, 4.0)]), mode="dense", use_mmr=False)
+    assert {r.score_source for r in out} == {"dense"}
+
+
 class FakeEmbedder2D:
     """Embedder returning a fixed 2-D query vector, to match 2-D candidate vectors."""
 
@@ -203,3 +257,30 @@ def test_top_dense_score_is_the_cosine_the_gate_compares():
 
     assert top_dense_score("q", Store(), Emb()) == 0.91
     assert top_dense_score("q", Empty(), Emb()) is None
+
+
+# --- MMR relevance in hybrid mode ---------------------------------------------
+
+def test_rank_relevance_is_linear_from_one_to_zero():
+    from rag.retrieve import _rank_relevance
+
+    assert _rank_relevance(5) == [1.0, 0.75, 0.5, 0.25, 0.0]
+    assert _rank_relevance(1) == [1.0]
+    assert _rank_relevance(0) == []
+
+
+def test_hybrid_mmr_keeps_a_dense_hit_over_a_lower_ranked_bm25_hit(monkeypatch):
+    # Fused order: 2, 3 (both lists), then 1 (dense only), then 4 (BM25 only).
+    # Min-max on the RRF scores gave 1 and 4 almost the same relevance (0.03
+    # and 0), so the third place went to 4, the one least like 2 and 3. With
+    # rank relevance 1 keeps its lead (0.33 vs 0) and takes the place.
+    monkeypatch.setattr(config, "MMR_LAMBDA", 0.6)
+    store = FakeStore(
+        [_r(1, 0.9), _r(2, 0.85), _r(3, 0.8)],
+        vectors={"1": [0.8776, 0.4794], "2": [1.0, 0.0], "3": [0.9553, 0.2955],
+                 "4": [0.9211, -0.3894]},
+    )
+    bm25 = FakeBM25([_r(2, 5.0), _r(3, 4.0), _r(4, 3.0)])
+    out = retrieve("q", store, FakeEmbedder2D(), top_k=3, threshold=0.5, bm25=bm25,
+                   mode="hybrid", use_mmr=True)
+    assert [r.chunk.id for r in out] == ["2", "3", "1"]

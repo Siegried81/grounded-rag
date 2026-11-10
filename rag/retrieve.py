@@ -6,16 +6,23 @@ embeddings miss, and MMR reorders the survivors to drop near-duplicate passages.
 
 The refusal rule is deliberately anchored to the DENSE cosine score: if nothing
 clears `threshold` there, we return [] (the caller's signal to refuse) regardless
-of retrieval mode. Hybrid fusion and MMR only reorder/diversify passages that are
-already semantically relevant — they never lower the bar for answering. The
-optional cross-encoder re-ranker (rag/rerank.py, off by default) follows the
-same rule: it re-orders the admitted pool and never changes a score.
+of retrieval mode. The gate is per query, not per passage: once one dense hit
+clears it, hybrid mode also lets in passages BM25 found on its own, whatever
+their cosine. That's on purpose: BM25 is there to catch exact terms like an
+article number that embeddings miss. Such a passage gets its dense cosine as
+`score` and `score_source="bm25"`, so nobody mistakes it for a dense hit. The
+optional cross-encoder re-ranker (rag/rerank.py, off by default) re-orders the
+admitted pool and never changes a score.
 
 Kept as a thin function over duck-typed `store`, `embedder` and `bm25` so it stays
 testable with fakes and the backends remain swappable.
 """
 
 from __future__ import annotations
+
+from dataclasses import replace
+
+import numpy as np
 
 import config
 from rag.fusion import mmr, reciprocal_rank_fusion
@@ -85,45 +92,42 @@ def retrieve(
     if not dense_pass:
         return []
 
-    # Relevance MMR should diversify: None means dense cosine (dense mode).
-    rel_scores: dict[str, float] | None = None
+    # MMR's relevance: the RRF rank in hybrid mode, the cross-encoder scores
+    # after the re-ranker, else (dense mode) the query cosine.
+    by_rank = False
+    ce_scores: dict[str, float] | None = None
     if mode == "dense" or bm25 is None:
         ranked = dense_pass
     else:
-        # Fuse the two channels by rank. Dense passages keep their cosine score
-        # (useful for display and verification); keyword-only hits carry their
-        # BM25 score as a fallback.
+        # Fuse the two channels by rank. Every passage shows its dense cosine as
+        # `score`; `score_source` says which channel found it.
         sparse = bm25.search(question, candidate_k)
-        by_id = {r.chunk.id: r for r in dense_pass}
-        for r in sparse:
-            by_id.setdefault(r.chunk.id, r)
+        by_id = _label_channels(dense_pass, dense, sparse, query_vec, store)
         fused = reciprocal_rank_fusion(
             [[r.chunk.id for r in dense_pass], [r.chunk.id for r in sparse]]
         )
         ranked = [by_id[cid] for cid, _ in fused if cid in by_id]
-        rel_scores = dict(fused)
+        by_rank = True
 
     if reranker is not None and len(ranked) > 1:
         # A sharper ORDER for the admitted pool; scores (and the gate) untouched.
-        # The cross-encoder's scores become MMR's relevance, as RRF's are above.
-        ranked, rel_scores = rerank(question, ranked, reranker)
+        # Its scores, min-max rescaled, become MMR's relevance. They aren't
+        # bunched like RRF's, and measured they beat the rank (decisions.md).
+        ranked, ce_scores = rerank(question, ranked, reranker)
 
     if use_mmr and len(ranked) > 1 and hasattr(store, "vectors_for_ids"):
         vecs = store.vectors_for_ids([r.chunk.id for r in ranked])
         candidates = [(r.chunk.id, vecs[r.chunk.id]) for r in ranked if r.chunk.id in vecs]
         if candidates:
             relevance = None
-            if rel_scores is not None:
+            if ce_scores is not None:
+                relevance = _min_max([ce_scores[cid] for cid, _ in candidates])
+            elif by_rank:
                 # In hybrid mode MMR must diversify the fused ranking: scoring
                 # relevance by dense cosine would discard the BM25 contribution.
-                # RRF scores are min-max rescaled to 0..1 to sit on the same
-                # footing as the redundancy (cosine) term. Raw RRF values are
-                # bunched (~0.012-0.033); dividing by the max alone left them
-                # all near 1, so redundancy dominated and relevance was lost.
-                # Cross-encoder scores (logits, any sign) are rescaled the same way.
-                raw = [rel_scores[cid] for cid, _ in candidates]
-                lo, hi = min(raw), max(raw)
-                relevance = [(s - lo) / (hi - lo) if hi > lo else 1.0 for s in raw]
+                # `candidates` is in fused order, so relevance is just the
+                # rank, spread evenly over 0..1.
+                relevance = _rank_relevance(len(candidates))
             order = mmr(
                 query_vec,
                 candidates,
@@ -139,6 +143,63 @@ def retrieve(
             ranked = diversified
 
     return ranked[:top_k]
+
+
+def _min_max(raw: list[float]) -> list[float]:
+    """Rescale `raw` to 0..1 (all 1.0 when they're equal)."""
+    lo, hi = min(raw), max(raw)
+    return [(s - lo) / (hi - lo) if hi > lo else 1.0 for s in raw]
+
+
+def _rank_relevance(n: int) -> list[float]:
+    """MMR relevance for `n` ranked candidates: 1 - (r-1)/(n-1), so 1.0 down to 0.0.
+
+    Min-max on the RRF scores doesn't work. With k=60 they're bunched (1/61 to
+    1/80 per list), so after rescaling the passages both lists found sit at
+    0.92 to 1.0 and the others at 0 to 0.18. For the last places the
+    redundancy term then beat relevance and MMR picked mostly by diversity.
+    The rank keeps the order and spaces it evenly. Measured in docs/decisions.md
+    (2026-11-10).
+    """
+    if n <= 1:
+        return [1.0] * n
+    return [1.0 - i / (n - 1) for i in range(n)]
+
+
+def _cosines(query_vec, vectors: dict[str, list[float]]) -> dict[str, float]:
+    """Cosine of `query_vec` with each vector, by id. A zero vector gets 0.0."""
+    q = np.asarray(query_vec, dtype=np.float32)
+    q_norm = float(np.linalg.norm(q))
+    out = {}
+    for cid, vec in vectors.items():
+        v = np.asarray(vec, dtype=np.float32)
+        denom = q_norm * float(np.linalg.norm(v))
+        out[cid] = float(v @ q) / denom if denom > 0 else 0.0
+    return out
+
+
+def _label_channels(dense_pass, dense, sparse, query_vec, store) -> dict[str, Retrieved]:
+    """Every fused passage by id, with its dense cosine and the channel that found it.
+
+    A passage in both lists is "both", one only dense hits found is "dense", one
+    only BM25 found is "bm25". A BM25-only hit gets its cosine from the dense
+    candidate list when it's there (below the threshold), else from its stored
+    vector. No cosine gate on these: BM25 is there to rescue exact terms.
+    """
+    sparse_ids = {r.chunk.id for r in sparse}
+    by_id = {
+        r.chunk.id: replace(r, score_source="both" if r.chunk.id in sparse_ids else "dense")
+        for r in dense_pass
+    }
+    known = {r.chunk.id: r.score for r in dense}
+    missing = [r.chunk.id for r in sparse if r.chunk.id not in by_id and r.chunk.id not in known]
+    if missing and hasattr(store, "vectors_for_ids"):
+        known.update(_cosines(query_vec, store.vectors_for_ids(missing)))
+    for r in sparse:
+        if r.chunk.id not in by_id:
+            # No vector (a fake store): the raw BM25 score stays, still labelled "bm25".
+            by_id[r.chunk.id] = Retrieved(r.chunk, known.get(r.chunk.id, r.score), "bm25")
+    return by_id
 
 
 def top_dense_score(question: str, store, embedder) -> float | None:

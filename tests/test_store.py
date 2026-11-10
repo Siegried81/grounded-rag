@@ -72,3 +72,35 @@ def test_load_rejects_chunk_vector_count_mismatch(tmp_path):
     np.save(tmp_path / "idx" / "vectors.npy", np.eye(2, 3, dtype=np.float32))
     with pytest.raises(ValueError, match="3 chunks, 2 vectors"):
         VectorStore.load(tmp_path / "idx")
+
+
+def _reference_search(vectors, chunks, query_vec, top_k):
+    """The search formula as it was before the row norms were cached."""
+    q = np.asarray(query_vec, dtype=np.float32)
+    norms = np.linalg.norm(vectors, axis=1)
+    denom = norms * np.linalg.norm(q)
+    dots = vectors @ q
+    scores = np.divide(dots, denom, out=np.zeros_like(dots), where=denom > 0)
+    order = np.argsort(-scores, kind="stable")[: min(top_k, len(chunks))]
+    return [(chunks[i].id, float(scores[i])) for i in order]
+
+
+def test_cached_norms_give_identical_results_across_queries_add_and_load(tmp_path):
+    rng = np.random.default_rng(0)
+    vecs = rng.normal(size=(300, 32)).astype(np.float32)
+    vecs[5] = 0.0
+    chunks = [Chunk(f"c{i}", "t", "a.txt", i, "demo") for i in range(300)]
+    s = VectorStore(tmp_path, "m")
+    s.add(chunks[:200], vecs[:200].tolist())
+    for _ in range(10):
+        q = rng.normal(size=32).tolist()
+        got = [(r.chunk.id, r.score) for r in s.search(q, 15)]
+        assert got == _reference_search(vecs[:200], chunks[:200], q, 15)
+    # add() must invalidate the cache: the new rows are searchable with their own norms.
+    s.add(chunks[200:], vecs[200:].tolist())
+    q = vecs[250].tolist()
+    assert [(r.chunk.id, r.score) for r in s.search(q, 15)] == _reference_search(vecs, chunks, q, 15)
+    # load() starts with a fresh cache too.
+    s.save()
+    loaded = VectorStore.load(tmp_path)
+    assert [(r.chunk.id, r.score) for r in loaded.search(q, 15)] == _reference_search(vecs, chunks, q, 15)

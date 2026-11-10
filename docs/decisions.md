@@ -201,3 +201,61 @@ One dated entry per change that alters what a number or a verdict means. Append,
   read as the judge breaking its JSON contract.
 - **What changes in the numbers:** `judge_unparsed` can be lower than before
   on runs with provider outages. `judge_mean` is unchanged.
+
+## 2026-11-10: A BM25-only passage shows its cosine and says it came from BM25
+
+- **What:** in hybrid mode a passage only BM25 found used to come in with its raw
+  BM25 score, and the API returned it in `score` next to cosines without saying
+  so. Now `retrieve` computes its dense cosine (from the dense candidate list, or
+  from its stored vector) and puts that in `score`. Every `Retrieved` and every
+  API source carries `score_source`: `dense`, `bm25` or `both`. The UIs mark a
+  `bm25` passage "keywords only".
+- **Why:** a BM25 score of 7.5 next to a cosine of 0.6 reads as "very relevant".
+  The docs also said fusion only reorders passages that are "already semantically
+  relevant". That's wrong: the gate is per query, and once one dense hit clears
+  it, BM25-only passages come in whatever their cosine.
+- **What it does not change:** no per-passage cosine gate for BM25 hits. BM25 is
+  there to catch exact terms (an article number) the embedding misses, and a
+  gate would drop those. The order, the gate and every eval number stay the same.
+
+## 2026-11-10: MMR's relevance in hybrid mode is the fused rank, not min-max RRF
+
+- **What:** in hybrid mode MMR's relevance is now `1 − (r−1)/(n−1)` over the
+  fused order (`rag/retrieve.py`, `_rank_relevance`). `MMR_LAMBDA` stays 0.6.
+  With the cross-encoder on, relevance stays its min-max rescaled scores.
+- **Why:** RRF scores with k = 60 are bunched (1/61 to 1/80 per list). After
+  min-max the passages both lists found sit at 0.92 to 1.0 and the others at 0
+  to 0.18, so for the last places 0.4 × the cosine gap beat 0.6 × relevance and
+  MMR picked by diversity.
+- **Measured** (`scripts/run_eval.py` and `run_phrasing_eval.py`, no LLM, hybrid,
+  same index; "gold@5" is the 28 answerable answer-eval questions whose gold
+  sources are all in the top 5):
+
+  | Variant | ai_act R@3 / MRR | ai_act R@5 | filings R@3 / MRR | filings R@5 / hit@5 | phrasing other_language | gold@5 |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | λ 0.6, min-max (old) | 0.957 / 0.746 | 0.978 | 0.900 / 0.840 | 0.960 / 0.960 | 3/8 | 28/28 |
+  | λ 0.75, min-max | 0.957 / 0.739 | 1.000 | 0.900 / 0.840 | 0.960 / 0.960 | 2/8 | 28/28 |
+  | λ 0.8, min-max | 0.935 / 0.746 | 1.000 | 0.920 / 0.840 | 0.960 / 0.960 | 3/8 | 28/28 |
+  | λ 0.6, rank (kept) | 0.957 / 0.754 | 1.000 | 0.900 / 0.833 | 1.000 / 1.000 | 3/8 | 28/28 |
+
+  The rank variant changed 54 of 68 top-5 lists, so I ran both live (answer eval
+  and red team, `gpt-oss-120b` on Groq, `LLM_CACHE=0`, same day). Old then rank:
+  refusals gate/model 0/11 and 0/11, refusal recall 0.917 and 0.917, citation
+  validity 1.000 and 1.000, verify-ok 0.966 and 0.966, key-fact recall 0.893 and
+  0.905, mean grounding 0.762 and 0.729, red team 17/21 and 18/21 (only `pii-01`
+  differs, a refusal the old run missed).
+- **Read it right:** every gap is one question or one case, so none of this is
+  significant. The rank variant is kept because it's the best or tied on every
+  retrieval row at the app's k = 5, it doesn't hurt refusals or citations, and
+  it fixes a mechanism that was wrong. The grounding drop (0.762 to 0.729) is
+  lexical overlap and stays in the noise of one run.
+- **Cross-encoder path:** with ranks instead of its min-max scores, re-ranked
+  retrieval fell (ai_act recall@3 0.935 to 0.848, filings 1.000 to 0.940).
+  Cross-encoder logits aren't bunched like RRF scores, so that path keeps
+  min-max and its published figures (MRR 0.891 / 0.940) reproduce unchanged.
+- **What changes in the numbers:** the retrieval table (MRR 0.746 to 0.754 and
+  0.840 to 0.833 at k = 3; recall@5 0.978 / 0.960 to 1.000 / 1.000). The answer
+  and red-team tables in the README are from the 14 October run and aren't
+  replaced by these single paired runs.
+- **Revisit if:** the eval sets grow enough to tell λ apart, or `CANDIDATE_K`
+  changes (n in the rank formula).

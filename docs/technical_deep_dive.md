@@ -206,27 +206,36 @@ query
   → if RERANKER: ranked = sort by cross_encoder(q, passage)  # optional, off by default
   → if USE_MMR: ranked = MMR(relevance, ranked vectors, MMR_LAMBDA)   # diversify
         # relevance = min-max cross-encoder score if re-ranked,
-        #             else min-max RRF score if fused, else dense cosine
+        #             else the fused rank if fused, else dense cosine
   → return ranked[:TOP_K]
 ```
 
 **The refusal gate is anchored to the dense cosine score, always.** Hybrid fusion
-and MMR only reorder and diversify passages that are *already* semantically
-relevant — they can never admit an answer that dense retrieval would have refused.
-This is deliberate: BM25 scores and RRF scores live on scales where "is this
-relevant enough to answer at all?" is not a meaningful threshold, so the semantic
-cosine score remains the single, stable gate.
+and MMR can never admit an answer that dense retrieval would have refused. But the
+gate is per query, not per passage: once one dense hit clears it, the passages
+BM25 found on its own come in too, whatever their cosine. That's on purpose:
+BM25 is there to catch exact terms (an article number, a ticker) the embedding
+misses, and a per-passage cosine gate would throw those away. So a BM25-only
+passage isn't "already semantically relevant". It shows its dense cosine as
+`score`, computed from its stored vector, and `score_source: "bm25"` (`"dense"`
+or `"both"` for the others), so the UIs and the API never pass a BM25 score off
+as a cosine. The gate itself stays on the cosine because BM25 and RRF scores
+live on scales where "is this relevant enough to answer at all?" isn't a
+meaningful threshold.
 
 - **RRF (`fusion.reciprocal_rank_fusion`).** Merges the dense and keyword rankings
   by summing `1/(k+rank)`. It uses ranks only, so the two incompatible score scales
   combine without normalisation.
 - **MMR (`fusion.mmr`).** Greedily selects passages maximising
   `λ·rel − (1−λ)·max sim(already-selected)`, dropping near-duplicates. In dense
-  mode `rel` is the query cosine. In hybrid mode `rel` is the fused RRF score,
-  min-max rescaled to 0..1: scoring by dense cosine would undo the fusion and
-  leave BM25 with no effect on the final ranking, and raw RRF values are too
-  bunched (~0.012–0.033) to weigh against the cosine redundancy term. It is
-  skipped gracefully if the store cannot supply vectors (e.g. a test fake).
+  mode `rel` is the query cosine. In hybrid mode `rel` is the fused rank,
+  `1 − (r−1)/(n−1)`, so 1.0 for the top passage down to 0.0 for the last.
+  Scoring by dense cosine would undo the fusion and leave BM25 with no effect.
+  It used to be the RRF score, min-max rescaled, but with k = 60 those are
+  bunched: passages both lists found landed at 0.92 to 1.0 and the rest at 0
+  to 0.18, so for the last places the redundancy term won and MMR picked by
+  diversity. The rank spaces them evenly (measured in `docs/decisions.md`,
+  2026-11-10). It's skipped if the store can't supply vectors (a test fake).
 - **Cross-encoder re-ranker (`rag/rerank.py`, `RERANKER=cross_encoder`, off by
   default).** A cross-encoder reads the question and a passage together and
   scores the pair, which orders a short list more sharply than comparing two
@@ -511,22 +520,27 @@ a correct retrieval.
 
 | Corpus (hybrid, k=3) | Documents | Chunks | Questions | recall@3 | MRR | hit_rate@3 (95% CI) |
 |---|---:|---:|---:|---:|---:|---:|
-| `ai_act_sections` | 308 | 878 | 23 | 0.957 | 0.746 | 1.000 (0.857–1.000) |
-| `filings_sections` | 6 | 155 | 25 | 0.900 | 0.840 | 0.920 (0.750–0.978) |
+| `ai_act_sections` | 308 | 878 | 23 | 0.957 | 0.754 | 1.000 (0.857–1.000) |
+| `filings_sections` | 6 | 155 | 25 | 0.900 | 0.833 | 0.920 (0.750–0.978) |
 
 Re-indexing the two rewritten annex files took `ai_act_sections` from 861 to 878
 chunks and left all four of its figures unchanged — a chunk-count change inside
 documents that were already retrieved well does not move source-level metrics.
 
-At `TOP_K = 5`, the value the app actually runs, the same sets give recall@5 0.978
-/ MRR 0.746 / hit_rate@5 1.000 and recall@5 0.960 / MRR 0.850 / hit_rate@5 0.960.
+At `TOP_K = 5`, the value the app actually runs, the same sets give recall@5 1.000
+/ MRR 0.754 / hit_rate@5 1.000 and recall@5 1.000 / MRR 0.851 / hit_rate@5 1.000.
+
+These numbers are from 10 November 2026, after MMR's relevance switched from the
+min-max RRF score to the fused rank (decisions.md). With the old relevance the
+same sets gave MRR 0.746 and 0.840 at k = 3, and recall@5 0.978 / 0.960 with
+filings hit_rate@5 0.960. Every move is one question.
 The table is kept at k = 3 because it is the harder routing test and because the
 k = 3 figures are the ones the README quotes; `--k 5` reproduces the other row.
 
 The AI Act row replaces an earlier 1.000 / 0.884 measured over **four** documents
 (a French summary of the Act split at its own headings), where source-level recall
 was close to free. Over 308 files the same 23 topics give 0.957 recall@3 and MRR
-0.746, with `hit_rate@3` still 1.000 — the drop in MRR is the metric starting to
+0.746 (0.754 now), with `hit_rate@3` still 1.000. The drop in MRR is the metric starting to
 mean something, not a regression.
 
 The sets are small, so one question moves recall by ~0.04; read differences of
@@ -897,7 +911,10 @@ What this says:
   and `jb-03`, the only two failures with the guard off, both passed, and no other
   case regressed. (`cite-01` passed in both halves, so this off-run scored 19/21
   rather than the 18/21 of the single run tabled above — live-run variance, which
-  is why both numbers are shown rather than averaged.) The guard stays off by
+  is why both numbers are shown rather than averaged.) Don't read 19/21 → 21/21
+  as a proven gain: only those 2 paired cases changed, all in one direction,
+  and an exact McNemar test on 2 discordant pairs gives p = 0.5. It's a good
+  sign that needs more cases or more runs. The guard stays off by
   default so the tabled numbers remain the ones the published prompt was measured
   on; the paired rows are in `logs/redteam_guard_off.jsonl` and
   `logs/redteam_guard_on.jsonl`.
@@ -1181,7 +1198,7 @@ PVCs, a Secret) is in `k8s/`, with its own README.
 
 ## 12. Testing strategy
 
-**485 tests, all offline: 484 passing and 1 skipped without `faiss-cpu`, 485 passing with it.** The whole suite runs with:
+**495 tests, all offline: 494 passing and 1 skipped without `faiss-cpu`, 495 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1436,7 +1453,8 @@ standard.
    sources, which is why those two rode in unfenced). Off by default, since it
    changes the prompt and so the LLM cache keys and every eval number. Measured in
    a paired redteam run (§8.3): off 19/21, on 21/21, `leak-02` and `jb-03` both
-   closed with nothing else regressed. Still to do is
+   closed with nothing else regressed (2 discordant pairs, McNemar p = 0.5, so
+   not significant yet). Still to do is
    re-running both live evaluations once, so the key-fact figures, the
    verify-ok rate under the figure check and `jb-01` under the widened
    `_STRONG_REFUSAL_RE` are measured rather than projected (§8).
@@ -1446,7 +1464,9 @@ standard.
    `ai_act_sections` and **0.840 → 0.940** on `filings_sections`, and filings
    recall@3/hit@3 reached 1.000 (the "market risks" miss fixed). The one cost is a
    small `ai_act_sections` recall@3 dip (0.957 → 0.935, one relevant source pushed
-   out of the top 3 on one question, n=23). Still to do: decide whether the MRR
+   out of the top 3 on one question, n=23). Re-run on 10 November 2026 after the
+   MMR change: the re-ranked figures are the same, and the baseline they beat is
+   now MRR 0.754 / 0.833. Still to do: decide whether the MRR
    gain is worth the recall dip and the `sentence-transformers`/`torch` dependency
    before making it the default.
 3. ~~**Semantic faithfulness**~~ — built and now measured, off by default: the NLI

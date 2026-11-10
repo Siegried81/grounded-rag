@@ -88,7 +88,9 @@ than `MAX_DOCUMENT_CHARS` (400,000) come back cut, with `truncated: true`.
 - `refused` and `refusal`: `{best_score, threshold, explanation, closest[]}`. The
   gate is the dense cosine threshold from `SCORE_THRESHOLD`; it is not a request
   parameter because changing it changes what a refusal means.
-- `sources[]`: `{sid, source, page, location, score, excerpt, excerpt_html, cited}`.
+- `sources[]`: `{sid, source, page, location, score, score_source, excerpt, excerpt_html, cited}`.
+  `score` is the dense cosine; `score_source` is `dense`, `bm25` or `both`, the
+  channel that found the passage. A `bm25` passage can have a low cosine.
   `excerpt_html` is HTML-escaped server-side and only adds `<mark>` tags and
   `<a>` links on bare `http(s)` URLs (`target="_blank" rel="noopener noreferrer"`).
 - `verification`: `{ok, grounding_score, min_grounding, valid_citations,

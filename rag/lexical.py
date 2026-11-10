@@ -59,7 +59,7 @@ class BM25Index:
         scores = self._bm25.get_scores(tokens)
         order = sorted(range(len(scores)), key=lambda i: (-scores[i], i))
         return [
-            Retrieved(self._chunks[i], float(scores[i]))
+            Retrieved(self._chunks[i], float(scores[i]), score_source="bm25")
             for i in order[:top_k]
             if scores[i] > 0
         ]

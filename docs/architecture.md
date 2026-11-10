@@ -44,7 +44,10 @@ its per-question rows to `logs/`.
 An answer is only allowed if it is grounded. The refusal gate is anchored to the
 **dense cosine** score: if no passage reaches `SCORE_THRESHOLD` (default 0.35), the
 assistant returns `REFUSAL_MESSAGE` instead of answering — regardless of retrieval
-mode, since hybrid fusion and MMR only reorder already-relevant passages. The
+mode. The gate is per query: once one dense hit clears it, hybrid mode also
+lets in passages BM25 found on its own, whatever their cosine (that's how an
+exact article number gets through). Each passage carries its dense cosine as
+`score` and a `score_source` (`dense`, `bm25` or `both`). The
 threshold is the one setting that changes what an answer means (too low → confident
 but ungrounded text; too high → answerable questions refused) and is tuned per
 embedding model in `config.py`.
