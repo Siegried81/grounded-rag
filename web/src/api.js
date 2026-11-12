@@ -3,7 +3,9 @@
 // (limitations, pipeline steps, refusal explanations) come back in the
 // interface language; a backend that does not know the parameter ignores it.
 
-// Turn a non-2xx response into an Error carrying FastAPI's `detail`.
+// Turn a non-2xx response into an Error carrying FastAPI's `detail`, with the
+// HTTP status kept on `err.status` so a caller can tell a gateway error while
+// the API starts (502/503/504) from a real failure.
 async function httpError(resp) {
   let detail = `${resp.status} ${resp.statusText}`;
   try {
@@ -13,7 +15,28 @@ async function httpError(resp) {
   } catch {
     /* non-JSON error body: keep the status line */
   }
-  return new Error(detail);
+  const err = new Error(detail);
+  err.status = resp.status;
+  return err;
+}
+
+// Run `call` until it succeeds, retrying a network error or a 502/503/504
+// every `everyMs` for up to `forMs`. The page can load before the API listens
+// (index loading at startup, a cold Render start), and the dev proxy or
+// Render's edge answers with a gateway error meanwhile; without a retry the
+// page would stay on "API unreachable" until a manual reload. `isLive()`
+// returning false stops the loop once the caller no longer wants the reply.
+export async function retryWhileStarting(call, isLive, { everyMs = 2000, forMs = 60000 } = {}) {
+  const deadline = Date.now() + forMs;
+  for (;;) {
+    try {
+      return await call();
+    } catch (e) {
+      const transient = e.status === undefined || [502, 503, 504].includes(e.status);
+      if (!transient || !isLive() || Date.now() + everyMs > deadline) throw e;
+      await new Promise((r) => setTimeout(r, everyMs));
+    }
+  }
 }
 
 async function request(path, options) {

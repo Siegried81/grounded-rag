@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ASK_TIMEOUT_MS, ask, askStream, getConfig, getCorpora } from "./api.js";
+import { ASK_TIMEOUT_MS, ask, askStream, getConfig, getCorpora, retryWhileStarting } from "./api.js";
 import { useT } from "./i18n.js";
 import { Inline } from "./markdown.jsx";
 import Header from "./components/Header.jsx";
@@ -46,7 +46,7 @@ export default function App() {
   // a quick language switch cannot leave the older language on screen.
   useEffect(() => {
     let live = true;
-    getCorpora(uiLang)
+    retryWhileStarting(() => getCorpora(uiLang), () => live)
       .then((data) => {
         if (!live) return;
         corporaLoaded.current = true;
