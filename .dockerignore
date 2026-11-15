@@ -15,6 +15,17 @@ logs/
 **/*.pyc
 .pytest_cache/
 .streamlit/secrets.toml
+# Private working files that git ignores (some only through .git/info/exclude,
+# which Docker never reads). `COPY . .` would carry them into an image built
+# from a local checkout, and that image has the Docker Hub name. The only
+# text files the image needs at the root are the requirements lists.
+_build/
+*.txt
+# Named one by one: an exception with a wildcard makes the builder walk every
+# excluded folder to look for a match, including ones it is not allowed to open.
+!requirements.txt
+!requirements-dev.txt
+!requirements-optional.txt
 # The corpora (11 MB of text) travel in the image: a platform without a bind
 # mount (Render) builds the indexes at start from them. docker-compose.yml
 # still mounts ./data read-only over them, so local edits win there.

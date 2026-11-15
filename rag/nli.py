@@ -102,11 +102,14 @@ class NLIChecker:
                 "NLI_CHECK=true needs the `sentence-transformers` package "
                 "(pip install -r requirements-optional.txt), or set NLI_CHECK=false."
             ) from exc
-        self._encoder = CrossEncoder(self.model)
-        id2label = self._encoder.model.config.id2label
+        encoder = CrossEncoder(self.model)
+        id2label = encoder.model.config.id2label
         names = [str(id2label[i]).lower() for i in range(len(id2label))]
         if sorted(names) != sorted(LABELS):
             raise RuntimeError(f"{self.model} is not a 3-way NLI model (labels: {names})")
+        # Kept only once the labels are checked: the checker is cached, so a
+        # rejected model must fail the same way on every later call.
+        self._encoder = encoder
         self._order = names
 
     def probabilities(self, pairs: list[tuple[str, str]]) -> list[dict[str, float]]:

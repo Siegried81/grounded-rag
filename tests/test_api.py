@@ -417,3 +417,13 @@ def test_ask_reports_a_figure_absent_from_the_cited_source(setup, client, monkey
     assert ver["unsupported_numbers"] == ["999"]
     assert ver["negation_mismatches"] == []
     assert "999" in ver["explanation"] and "does not pass" not in ver["explanation"]
+
+
+def test_half_written_index_is_not_listed_as_a_corpus(monkeypatch, tmp_path):
+    """A folder holding only the embedding cache is what an interrupted ingest leaves."""
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(config, "INDEX_DIR", tmp_path / "index")
+    (tmp_path / "data" / "broken").mkdir(parents=True)
+    (tmp_path / "index" / "broken").mkdir(parents=True)
+    (tmp_path / "index" / "broken" / "embed_cache.json").write_text("{}", encoding="utf-8")
+    assert api.indexed_corpora() == []

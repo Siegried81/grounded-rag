@@ -139,8 +139,13 @@ def test_a_model_that_is_not_three_way_nli_is_refused(monkeypatch):
     module = type(sys)("sentence_transformers")
     module.CrossEncoder = TwoWay
     monkeypatch.setitem(sys.modules, "sentence_transformers", module)
+    checker = nli.NLIChecker("m")
     with pytest.raises(RuntimeError, match="not a 3-way NLI model"):
-        nli.NLIChecker("m").probabilities([("a", "b")])
+        checker.probabilities([("a", "b")])
+    # The checker is cached per process: a second question must get the same
+    # clear error, not empty probabilities from a half-loaded model.
+    with pytest.raises(RuntimeError, match="not a 3-way NLI model"):
+        checker.probabilities([("a", "b")])
 
 
 def test_missing_sentence_transformers_is_a_clear_error(monkeypatch):
