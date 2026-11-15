@@ -284,9 +284,9 @@ is in `.streamlit/secrets.toml.example`:
 
 ```toml
 EMBED_PROVIDER = "hosted"
-HOSTED_EMBED_BASE_URL = "https://api.mistral.ai/v1"   # any OpenAI-compatible /embeddings endpoint
-HOSTED_EMBED_MODEL = "mistral-embed"
-HOSTED_EMBED_API_KEY = "..."
+HOSTED_EMBED_BASE_URL = "https://openrouter.ai/api/v1"   # any OpenAI-compatible /embeddings endpoint
+HOSTED_EMBED_MODEL = "nvidia/nemotron-3.5-embed-1b:free"
+HOSTED_EMBED_API_KEY = "..."                             # the OpenRouter key
 GROQ_API_KEY = "..."
 AUTO_INGEST = "ai_act_sections,filings_sections"
 ```
@@ -296,7 +296,13 @@ missing. That platform has no build step and no persistent disk, so the index
 is rebuilt (one embedding request per batch of chunks) on every cold start and
 the first visitor after one waits for it, behind a spinner. Left empty, as on a
 workstation, a missing index stays a "run ingest" message. Groq serves no
-embeddings endpoint, so the embedder key is a second provider's key.
+embeddings endpoint, so the embedder key is a second provider's key: here an
+OpenRouter key, which also reaches its free embedding models. A cold start
+with that model was rehearsed locally on 15 November 2026 (both indexes built
+in about 20 s, the 878 AI Act passages in one request). The refusal threshold
+and every published figure were measured with `nomic-embed-text`, so on this
+embedder the threshold is a carried-over setting, not a calibrated one (see
+`docs/decisions.md`).
 
 **Evaluations** — the first two need only local embeddings, the last two make one
 live LLM call per question:
@@ -331,7 +337,7 @@ account's credits: without any it answers 402 and the chain moves on.
 
 ## Tests
 
-`python -m pytest -q`: **494 passing** (plus 1 skipped without `faiss-cpu`; 495 with it), the whole suite offline (fake embedder,
+`python -m pytest -q`: **495 passing** (plus 1 skipped without `faiss-cpu`; 496 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations

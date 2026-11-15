@@ -1198,7 +1198,7 @@ PVCs, a Secret) is in `k8s/`, with its own README.
 
 ## 12. Testing strategy
 
-**495 tests, all offline: 494 passing and 1 skipped without `faiss-cpu`, 495 passing with it.** The whole suite runs with:
+**496 tests, all offline: 495 passing and 1 skipped without `faiss-cpu`, 496 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider

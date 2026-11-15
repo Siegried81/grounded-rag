@@ -259,3 +259,26 @@ One dated entry per change that alters what a number or a verdict means. Append,
   replaced by these single paired runs.
 - **Revisit if:** the eval sets grow enough to tell λ apart, or `CANDIDATE_K`
   changes (n in the rank formula).
+
+## 2026-11-15: The Streamlit Cloud setup embeds with an OpenRouter model, on an uncalibrated threshold
+
+- **What:** the README and `.streamlit/secrets.toml.example` now point the
+  hosted embedder at OpenRouter (`nvidia/nemotron-3.5-embed-1b:free`) instead of
+  Mistral (`mistral-embed`). No code changed: `HostedEmbedder` already takes
+  any OpenAI-compatible `/embeddings` endpoint.
+- **Why:** the Mistral account behind this project sits on a plan whose API
+  keys are not active, and the OpenRouter key the project already uses for
+  generation also reaches free embedding models.
+- **What was measured:** one local rehearsal of the cold start (clean checkout,
+  `requirements.txt` only, no index). Both indexes built in about 20 s, with
+  the 878 AI Act passages sent in a single request. "Which AI practices are
+  prohibited?" retrieved Article 5 first at cosine 0.642 and was answered; an
+  off-topic question was refused by the gate.
+- **What changes in the numbers:** nothing published. Every table in the
+  README was measured with `nomic-embed-text`, and `SCORE_THRESHOLD` = 0.35 was
+  chosen on that model's score scale. On the cloud embedder the same 0.35 is a
+  carried-over setting: two questions behaved correctly, which is not a
+  calibration.
+- **Revisit if:** the deployed app refuses answerable questions or answers
+  off-topic ones. Then run `scripts/run_eval.py` with this embedder and set the
+  threshold from its scores.

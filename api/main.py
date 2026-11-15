@@ -68,12 +68,17 @@ app.add_middleware(
 
 
 def indexed_corpora() -> list[str]:
-    """Corpus folders under DATA_DIR that already have a built index (as app.py)."""
+    """Corpus folders under DATA_DIR that already have a built index (as app.py).
+
+    Judged on the store's two files, not on the folder: an interrupted ingest
+    leaves a folder with only the embedding cache, and loading that would crash
+    the page for every corpus.
+    """
     if not config.DATA_DIR.exists():
         return []
     return sorted(
         p.name for p in config.DATA_DIR.iterdir()
-        if p.is_dir() and config.index_path(p.name).exists()
+        if p.is_dir() and VectorStore.exists(config.index_path(p.name))
     )
 
 

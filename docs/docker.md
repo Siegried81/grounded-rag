@@ -109,7 +109,10 @@ Linux too; Docker Desktop provides it natively.
   inherit write access.
 - **`.dockerignore`**: excludes `.env`, `.venv`, `index/`, `cache/`, `logs/`,
   `.git` and `__pycache__`. Keys never enter the image or the build context, and
-  indexes are runtime state rather than build output.
+  indexes are runtime state rather than build output. It also excludes the
+  private working files git ignores (`_build/` and loose `.txt` notes at the
+  root, the requirements lists excepted), so an image built from a local
+  checkout holds the same files as the one CI builds.
 - **Corpora mounted read-only**: `./data` is input. Mounting it `:ro` means neither
   the app nor ingestion can modify the documents answers are grounded on, and
   adding a document needs no rebuild, only a re-ingest.
