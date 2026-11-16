@@ -4,7 +4,7 @@ Dense retrieval embeds the question and each passage separately, then compares
 the two vectors; BM25 counts shared terms. A cross-encoder reads the question
 and the passage TOGETHER and outputs one relevance score, which orders a short
 candidate list more sharply than either. It is too slow to run over a whole
-corpus, so it only re-orders the pool retrieval already built — after the
+corpus, so it only re-orders the pool retrieval already built, after the
 refusal gate, before MMR and the `TOP_K` cut.
 
 It never touches the gate: a passage's displayed `score` stays its dense cosine

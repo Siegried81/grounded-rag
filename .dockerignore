@@ -26,7 +26,7 @@ _build/
 !requirements.txt
 !requirements-dev.txt
 !requirements-optional.txt
-# The corpora (11 MB of text) travel in the image: a platform without a bind
+# The corpora (10 MB of text) travel in the image: a platform without a bind
 # mount (Render) builds the indexes at start from them. docker-compose.yml
 # still mounts ./data read-only over them, so local edits win there.
 Dockerfile

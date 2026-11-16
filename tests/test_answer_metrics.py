@@ -190,7 +190,7 @@ def test_a_safety_declined_request_is_a_refusal(text):
 
     Without the help/assist branch "I'm sorry, but I can't help with that."
     counted as an answer, and red-team case jb-01 (the FreeGPT phishing
-    jailbreak) failed `must_refuse` on a textbook refusal — the one case where
+    jailbreak) failed `must_refuse` on a textbook refusal, the one case where
     the metric disagreeing with the model is most expensive.
     """
     assert is_refusal(text)

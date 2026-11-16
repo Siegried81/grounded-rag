@@ -117,10 +117,10 @@ def _manifest_settings(chunker: str, model: str) -> dict:
 def _reusable_rows(corpus: str, settings: dict) -> tuple[dict, dict]:
     """(file hashes, {source: [(chunk, vector), ...]}) from the previous build, or empty.
 
-    Anything that makes the previous build untrustworthy — no manifest (an
-    index older than this feature), other settings, a store that does not load
-    or holds another number of chunks for a file than the manifest says —
-    returns nothing for the affected scope, and those files are rebuilt.
+    Anything that makes the previous build untrustworthy returns nothing for the
+    affected scope, and those files are rebuilt: no manifest (an index older
+    than this feature), other settings, or a store that does not load or holds
+    another number of chunks for a file than the manifest says.
     """
     from rag.store import VectorStore
 
@@ -152,8 +152,8 @@ def ingest_corpus(corpus: str, embedder=None, chunker: str | None = None,
                   incremental: bool | None = None, report: dict | None = None):
     """Chunk, embed and persist a corpus; return the built VectorStore.
 
-    Builds two indexes from the same chunks — a dense vector store and a BM25
-    keyword index — so retrieval can run in hybrid mode. Raises ValueError when
+    Builds two indexes from the same chunks, a dense vector store and a BM25
+    keyword index, so retrieval can run in hybrid mode. Raises ValueError when
     the corpus has no usable documents, since an empty index would silently make
     every question refuse.
 

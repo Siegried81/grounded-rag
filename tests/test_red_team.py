@@ -17,7 +17,7 @@ Every test is offline and deterministic: the embedder is the repo's
 `rag.embed.FakeEmbedder`, the store is a local fake, and the LLM is monkeypatched
 to a recorder. No index, network or API key is touched. Each test is named after
 the attack it represents. The one documented defense limitation (verify cannot
-tell that a model OBEYED an injection — only that it stayed grounded) is pinned
+tell that a model OBEYED an injection, only that it stayed grounded) is pinned
 by `test_injection_compliance_is_not_detected_by_verify_documented_gap`, whose
 behavioural counterpart lives in the live probe `scripts/red_team.py`.
 """

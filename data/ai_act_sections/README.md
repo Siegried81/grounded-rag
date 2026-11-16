@@ -28,7 +28,7 @@ sort reproduces reading order (this README is not counted; it is not ingested):
 
 The unit is the unit the regulation itself cites: you ask about "Article 50" or
 "Annex III", not about byte range 412000-412900. That is what makes the retrieval
-evaluation meaningful — each eval question is labelled with the one or two files
+evaluation meaningful: each eval question is labelled with the one or two files
 that answer it, so `recall@k` and `MRR` measure whether retrieval routes to the
 right article rather than saturating at 1.0 on a single blob. Each article file
 repeats its chapter heading on the first line so the opening chunk carries that
@@ -45,18 +45,18 @@ Extracted from the saved EUR-Lex HTML of the EN version. EUR-Lex lays numbered
 lists out as nested two-column tables (marker cell, text cell), so the extraction
 folds each marker into the first paragraph of its cell; footnote call-outs are
 dropped (their targets are OJ references to other legislation, printed outside the
-articles), and the one real superscript is kept as `10^25` in Article 51(2) — the
+articles), and the one real superscript is kept as `10^25` in Article 51(2): the
 FLOP threshold reads "1025" if it is flattened.
 
 EUR-Lex answers scripted requests with HTTP 202 and an empty body, so the HTML
 has to be saved from a browser; re-running the extraction needs that saved page
-and `lxml` (which is not a project dependency — the extraction is a one-off, its
+and `lxml` (which is not a project dependency; the extraction is a one-off, its
 output is what the repo ships).
 
 ## Why there is no longer an `ai_act` corpus
 
 `data/ai_act/` used to hold a single document and `data/ai_act_sections/` four
-files split from it at its own `##` headings — the same text twice (measured: 207
+files split from it at its own `##` headings, the same text twice (measured: 207
 of 207 unique words shared), which made "two corpora" a presentation of one.
 Keeping a whole-regulation copy beside the per-unit split would reproduce exactly
 that, so the single-document corpus is retired and this is the only AI Act corpus.
