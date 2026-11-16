@@ -1,8 +1,8 @@
 """Central configuration: all tunables and provider settings in one place.
 
 Values are read from the environment (via a .env file) with sensible defaults so
-the project runs out of the box with local Ollama. Keeping every knob here — chunk
-sizes, the retrieval threshold, provider endpoints — means no module hardcodes a
+the project runs out of the box with local Ollama. Keeping every knob here (chunk
+sizes, the retrieval threshold, provider endpoints) means no module hardcodes a
 magic number, and the one setting that changes what an answer means (the relevance
 threshold below which the assistant refuses) is visible and documented.
 """

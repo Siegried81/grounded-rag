@@ -73,7 +73,7 @@ def never_crash_on_console_encoding() -> None:
     The eval scripts print question and answer text verbatim. A Windows console
     is cp1252, EUR-Lex and the models emit U+2011 (non-breaking hyphen), U+202F
     (narrow no-break space) and U+2019 (curly apostrophe), and `print` then dies
-    with a UnicodeEncodeError — after the LLM calls for that run have already
+    with a UnicodeEncodeError, after the LLM calls for that run have already
     been made and paid for. Replacing the character costs one glyph of a printed
     line; raising costs the run.
 

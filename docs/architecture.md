@@ -1,7 +1,7 @@
 # Architecture (overview)
 
-A one-page map of the engine. The full reference — every decision, trade-off and
-limitation — is in [`technical_deep_dive.md`](technical_deep_dive.md).
+A one-page map of the engine. The full reference (every decision, trade-off and
+limitation) is in [`technical_deep_dive.md`](technical_deep_dive.md).
 
 ## Pipeline
 
@@ -31,7 +31,7 @@ limitation — is in [`technical_deep_dive.md`](technical_deep_dive.md).
    grounding score is computed, and every figure a cited sentence states must
    appear in the sources it cites, on every answer.
 
-**Evaluation (`scripts/`)**: four suites — retrieval metrics (`run_eval.py`,
+**Evaluation (`scripts/`)**: four suites: retrieval metrics (`run_eval.py`,
 scored by `rag/metrics.py`), answer-level metrics (`run_answer_eval.py`,
 `rag/answer_metrics.py`), an adversarial red-team suite (`run_redteam.py`) and a
 phrasing-robustness check (`run_phrasing_eval.py`). The first and last need only
@@ -43,14 +43,15 @@ its per-question rows to `logs/`.
 
 An answer is only allowed if it is grounded. The refusal gate is anchored to the
 **dense cosine** score: if no passage reaches `SCORE_THRESHOLD` (default 0.35), the
-assistant returns `REFUSAL_MESSAGE` instead of answering — regardless of retrieval
+assistant returns `REFUSAL_MESSAGE` instead of answering, regardless of retrieval
 mode. The gate is per query: once one dense hit clears it, hybrid mode also
 lets in passages BM25 found on its own, whatever their cosine (that's how an
 exact article number gets through). Each passage carries its dense cosine as
 `score` and a `score_source` (`dense`, `bm25` or `both`). The
 threshold is the one setting that changes what an answer means (too low → confident
-but ungrounded text; too high → answerable questions refused) and is tuned per
-embedding model in `config.py`.
+but ungrounded text; too high → answerable questions refused). It is one value
+in `config.py`, chosen with `nomic-embed-text` and not calibrated on any other
+embedding model.
 
 **What the gate does not do.** Over 61 live questions, run three times, it has never fired. The
 unanswerable eval questions score 0.599–0.888 top cosine and the answerable ones
@@ -63,7 +64,7 @@ the threshold.
 
 **And what verification does not do.** `rag/verify.py` checks that a citation
 exists, points inside the retrieved set, shares vocabulary with the answer, and
-carries every figure the sentence states — none of which is a check on truth. The worked example is `aa-03`, in
+carries every figure the sentence states, none of which is a check on truth. The worked example is `aa-03`, in
 [`technical_deep_dive.md`](technical_deep_dive.md) §8.2: a fine quoted correctly
 from the wrong article's scope, `verify_ok: true`. Read it
 before trusting a green verification badge; it is why a source card's filename
@@ -75,6 +76,7 @@ A corpus here is hundreds to a few thousand chunks; brute-force cosine is a few
 milliseconds and needs no server, deploys with the repo, and is trivially
 inspectable and testable. The `VectorStore` interface (`add`, `search`, `save`,
 `load`) is small enough to re-implement on another backend without touching the
-rest of the pipeline. One exists: `VECTOR_INDEX=faiss` (`rag/ann.py`, off by
-default) lets an HNSW graph propose the candidates while the store keeps scoring
-them.
+rest of the pipeline. Two exist, both off by default: `VECTOR_INDEX=faiss`
+(`rag/ann.py`) lets an HNSW graph propose the candidates while the store keeps
+scoring them, and `VECTOR_INDEX=qdrant` (`rag/qdrant_index.py`) does the same
+with a Qdrant server.

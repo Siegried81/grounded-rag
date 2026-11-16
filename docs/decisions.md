@@ -2,7 +2,7 @@
 
 One dated entry per change that alters what a number or a verdict means. Append, never rewrite.
 
-## 2026-10-10 — A figure the cited source does not carry fails the answer
+## 2026-10-10: A figure the cited source does not carry fails the answer
 
 - **What:** `rag/verify.py` checks, per cited sentence, that every figure the
   sentence states appears in the sources that sentence cites (thousand
@@ -24,10 +24,10 @@ One dated entry per change that alters what a number or a verdict means. Append,
   says deployers) and paraphrased contradictions still pass. Those need a
   claim-to-passage entailment check or a human reader.
 - **Revisit if:** an answer legitimately derives a figure (a sum, a conversion)
-  from its sources — it will be flagged; the fix is to cite the figures it was
+  from its sources, it will be flagged. The fix is to cite the figures it was
   derived from, or to exempt derived figures explicitly.
 
-## 2026-10-14 — Figure check: whole numbers keep their zeros, scale words and no-break spaces understood
+## 2026-10-14: Figure check: whole numbers keep their zeros, scale words and no-break spaces understood
 
 - **What:** `verify._numbers` stripped trailing zeros from every figure, not just
   from decimals, so "35 000 000" read as "35", "1,000" as "1" and "240 hours" as
@@ -48,7 +48,7 @@ One dated entry per change that alters what a number or a verdict means. Append,
   in a table header) and the answer gives the expanded value: that pair is still
   reported as unsupported.
 
-## 2026-10-14 — Answer and red-team evaluations re-run live
+## 2026-10-14: Answer and red-team evaluations re-run live
 
 - **What:** `run_eval.py` (k = 3 and 5, both corpora), `run_phrasing_eval.py`,
   `run_answer_eval.py` and `run_redteam.py` re-run end to end with
@@ -68,7 +68,7 @@ One dated entry per change that alters what a number or a verdict means. Append,
   refused correctly but repeated the forbidden `[S9]` label. Refusals gate /
   model 0/10. The gate has fired zero times over 61 questions run three times.
 
-## 2026-10-24 — The cross-encoder reranker stays off by default (opt-in)
+## 2026-10-24: The cross-encoder reranker stays off by default (opt-in)
 
 - **What:** `RERANKER=none` remains the default; the cross-encoder
   (`cross-encoder/ms-marco-MiniLM-L-6-v2`, `rag/rerank.py`) stays an opt-in set
@@ -78,13 +78,13 @@ One dated entry per change that alters what a number or a verdict means. Append,
 - **Why:** three reasons outweigh the MRR gain. (1) It needs `torch` +
   `sentence-transformers` (`requirements-optional.txt`, hundreds of MB); the
   default install stays numpy-only, as the README advertises. (2) It re-scores
-  `CANDIDATE_K` candidates on every query — a real per-query cost on CPU that a
+  `CANDIDATE_K` candidates on every query, a real per-query cost on CPU that a
   silent default should not impose on the interactive UI. (3) It is not strictly
   dominant: ai_act recall@3 dips (noise at n = 23, but not a free win), and
   recall is what feeds cite-or-refuse. The MRR gain is in ordering, while the
   answer receives the full `top_k` set regardless of internal order, so a better
   rank-1 helps less at answer time than the MRR delta suggests.
-- **What changes in the numbers:** nothing in the published default tables — they
+- **What changes in the numbers:** nothing in the published default tables; they
   are measured with `RERANKER=none`. The figures above are the opt-in path and
   are reported as such.
 - **Recommended when:** `torch` is installed and the latency budget allows it
@@ -92,9 +92,9 @@ One dated entry per change that alters what a number or a verdict means. Append,
   takes filings retrieval to recall@3 = 1.000.
 - **Revisit if:** the default install gains torch for another reason (then the
   dependency objection falls), or a lighter reranker (ONNX / distilled) removes
-  the latency cost — either would make a default-on reranker defensible.
+  the latency cost; either would make a default-on reranker defensible.
 
-## 2026-10-25 — Hugging Face joins the LLM fallback chain only when a token is set
+## 2026-10-25: Hugging Face joins the LLM fallback chain only when a token is set
 
 - **What:** a `huggingface` provider in `rag/llm.py` calls Hugging Face's
   OpenAI-compatible router (`router.huggingface.co/v1`) with `HF_TOKEN` and
@@ -102,8 +102,8 @@ One dated entry per change that alters what a number or a verdict means. Append,
   makes it first; otherwise it sits before Ollama, and only when `HF_TOKEN` is set.
 - **Why conditional:** the provider order and its models are part of the LLM cache
   key (§9.3 of the deep dive). Listing it unconditionally would have changed the
-  key of every request, so every cached answer — including those behind the
-  published evaluations — would have been re-paid on the next run. Without a
+  key of every request, so every cached answer, including those behind the
+  published evaluations, would have been re-paid on the next run. Without a
   token, the order and the key are exactly what they were
   (`tests/test_llm_huggingface.py::test_cache_keys_without_huggingface_are_unchanged`).
 - **What changes in the numbers:** nothing published. The default chain, models
@@ -111,10 +111,10 @@ One dated entry per change that alters what a number or a verdict means. Append,
 - **Measured on the day:** the router accepts the account token but answers 402
   ("no remaining credits"): the account has no Inference Providers credits, so in
   practice the provider currently falls through to the next one.
-- **Revisit if:** the account gets credits — then the answer eval can be run with
+- **Revisit if:** the account gets credits; then the answer eval can be run with
   `LLM_PROVIDER=huggingface` to compare it with Groq.
 
-## 2026-11-04 — One Qdrant collection per store, named `<QDRANT_COLLECTION>_<index dir>`
+## 2026-11-04: One Qdrant collection per store, named `<QDRANT_COLLECTION>_<index dir>`
 
 - **What:** `rag/store.py` now builds each store's Qdrant index into its own
   collection, `f"{config.QDRANT_COLLECTION}_{index_dir.name}"`
@@ -282,3 +282,40 @@ One dated entry per change that alters what a number or a verdict means. Append,
 - **Revisit if:** the deployed app refuses answerable questions or answers
   off-topic ones. Then run `scripts/run_eval.py` with this embedder and set the
   threshold from its scores.
+
+## 2026-11-16: Qdrant returns `top_k` candidates, and the docs were audited against the code
+
+- **What:** commit 43cde89 (10 November) changed two things the entries of that
+  day don't cover. Qdrant now gets the HNSW beam as `SearchParams(hnsw_ef=...)`
+  and returns `limit = min(n, top_k)` rows, where it used to return
+  `min(n, max(top_k, FAISS_EF_SEARCH))`, so 64 rows at the defaults. The store
+  also caches its row norms (`VectorStore._row_norms`), reset in `add` and `load`.
+- **What changes in the numbers:** nothing published. The norm cache gives the
+  same cosines, and Qdrant is off by default (`VECTOR_INDEX=numpy`). With Qdrant
+  on, the store rescores `top_k` rows instead of up to 64, so its exact cosine
+  can no longer pull in a row the HNSW graph ranked below `top_k`. FAISS still
+  asks for `max(top_k, efSearch)`. No run has measured the difference.
+- **Docs audit:** every number and name in the Markdown files was checked
+  against the code and the logs. The retrieval and phrasing tables were re-run
+  locally with `nomic-embed-text` and reproduced exactly (recall@3 0.957 / 0.900,
+  MRR 0.754 / 0.833, recall@5 1.000 / MRR@5 0.754 and 0.851, phrasings 8/8, 7/8,
+  3/8, consistency 3/8). The answer and red-team figures match
+  `logs/answer_eval_results.jsonl` and `logs/redteam_results.jsonl`. Fixed: the
+  red-team failures are `jb-03`, `leak-02` and `cite-01` (not `jb-01`), the
+  `aa-16` and `aa-17` quotes now come from the 14 October run the tables report
+  (they came from the 24 October NLI run), `cite-01` fails two checks, the live
+  re-run and the NLI run are recorded as done, and `aa-06` cites after the full
+  stop five times, not three.
+- **The 6 and 8 November verifier changes, measured:** their entries say the
+  published tables were not re-run. Retrieval at e378805 (before the 8 November
+  change) returns, for all 40 logged questions, the passages
+  `logs/answer_eval_results.jsonl` lists, and that commit's verifier reproduces
+  every logged `verify_ok` and grounding score. The current verifier on the same
+  passages and answers gives the same values: verify-ok 0.938 / 1.000 / 0.967,
+  mean grounding 0.741 / 0.779 / 0.759. The README says so beside the table.
+- **Still unverifiable:** `logs/` and `index/` are gitignored, so a fresh clone
+  can't check any eval figure, and older runs (the four-document MRR 0.884, the
+  verify-ok 0.214 → 1.000 sequence) kept no artifact.
+- **Older entries:** their wording and figures are left as written; only their long
+  dashes became commas, colons or parentheses. Errors found in them are listed
+  in this entry.

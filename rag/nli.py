@@ -4,7 +4,7 @@
 proves a claim is traceable, not that it follows: "X is not required [S1]"
 against a passage saying "X is required" shares nearly every word. A natural
 language inference (NLI) model reads a premise and a hypothesis together and
-says whether the premise entails, contradicts or is neutral to it — the
+says whether the premise entails, contradicts or is neutral to it: the
 question lexical overlap cannot ask.
 
 How it is applied, and why:
@@ -15,7 +15,7 @@ How it is applied, and why:
 - Each cited passage is a separate premise and the best entailment wins. A
   passage fits the model's input window; several concatenated might not and
   would be silently truncated. The cost is that a claim needing two passages
-  together reads as not entailed by either — a conservative error.
+  together reads as not entailed by either, a conservative error.
 - It is REPORTED next to the lexical grounding, never folded into it: `ok`,
   `strict_ok` and `grounding_score` keep their definitions and every published
   number keeps its meaning. The model can be wrong too, and an unmeasured

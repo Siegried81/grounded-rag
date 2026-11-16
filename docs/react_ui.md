@@ -62,7 +62,7 @@ then `docker compose --profile api up --build` and open http://localhost:8002.
 | POST | `/api/ask/stream` | Same body; `text/event-stream` of `sources` (passages, none cited yet), `delta` (`{text}`, raw model text) and a final `done` whose data is exactly the `/api/ask` response. |
 
 `ui_lang` (`en` / `fr`, default `en`) selects the language of the text the API
-*generates itself* — the refusal and grounding explanations, the pipeline steps and
+*generates itself*: the refusal and grounding explanations, the pipeline steps and
 the limitations. `language` on `/api/ask` is a different setting: it is the
 language the **model** writes the answer in (`auto` / `en` / `fr` / `nl`, default
 `config.DEFAULT_ANSWER_LANGUAGE`). They are deliberately separate, because reading
@@ -114,7 +114,7 @@ the refusal gate and every error path are shared with `/api/ask`, so a refusal o
 a retrieval error is a single `done` event; 422 and 404 are plain JSON errors sent
 before any event. The `delta` events are the model's raw text, for display only:
 citations are normalised and the answer verified once it is complete, so the
-`done` payload — answer, sources, verification — is what `/api/ask` returns for
+`done` payload (answer, sources, verification) is what `/api/ask` returns for
 the same request, and the client replaces what it streamed with it. A failure
 after some text was streamed ends with `done` carrying an `llm` error and the
 passages. `GET /api/config` reports `stream_answers` (`STREAM_ANSWERS`, default
@@ -171,5 +171,5 @@ skips without `faiss-cpu`).
 
 The React side has no test runner: `web/src` is covered only by the API contract
 above and by hand. `markdown.jsx` is the one place that would matter most, and it
-is written to be safe by construction — every part is emitted as a React text
-node, never as raw HTML — rather than proven so by a test.
+is written to be safe by construction (every part is emitted as a React text
+node, never as raw HTML) rather than proven so by a test.

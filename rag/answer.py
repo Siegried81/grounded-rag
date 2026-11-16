@@ -58,7 +58,7 @@ SYSTEM_PROMPT = (
 
 # Appended to the system prompt only when config.USER_TURN_GUARD is on. It tells
 # the model that the <user_question> block (see `_fence_question`) is a request to
-# satisfy from the sources, not a place instructions can come from — the gap that
+# satisfy from the sources, not a place instructions can come from: the gap that
 # let leak-02 (prompt extraction) and jb-03 (an appended "GRANDMA UNLOCKED")
 # through, since the question, unlike the sources, was never fenced.
 _USER_TURN_NOTE = (

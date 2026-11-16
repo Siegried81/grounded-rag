@@ -40,7 +40,7 @@ How each measurement is defined, and why:
   Text facts match on word boundaries after lowercasing, accent stripping and
   punctuation removal. Superscript digits are read as an exponent, so the fact
   "10^25" is satisfied by an answer written "10²⁵" but still NOT by the flattened
-  "1025" — see `normalize_text`, which widens what a text fact matches.
+  "1025"; see `normalize_text`, which widens what a text fact matches.
   Numeric facts match any number in the answer within ±1%,
   whatever the grouping (1,234 / 1 234 / 1234), with million/billion scales
   applied, so "$416.2 billion" matches "$416,161 million". A bare number in the
@@ -147,7 +147,7 @@ def normalize_text(text: str) -> str:
     which is also what the caret of "10^25" becomes once punctuation is spaced out.
     This widens what a text fact matches: an exponent typed either way now counts
     as the same fact. It is done BEFORE the NFKD pass on purpose, because NFKD maps
-    "²⁵" to "25" with no separator and would turn "10²⁵" into "1025" — a different
+    "²⁵" to "25" with no separator and would turn "10²⁵" into "1025", a different
     number. The flattened "1025" therefore still does NOT satisfy "10^25".
     """
     text = _SUPERSCRIPT_RUN_RE.sub(lambda m: " " + m.group(0).translate(_SUPERSCRIPT_DIGITS), text)
@@ -332,9 +332,9 @@ def summarize(rows: list[dict]) -> dict:
 
     Rows carrying an `error` (the LLM call failed) are counted but excluded from
     every metric: a provider outage says nothing about answer quality.
-    Refusals are also counted split by origin — the retrieval gate (no LLM call)
-    against the model declining in its own words — because the refusal scores
-    below merge them, so a reader cannot otherwise tell which component refused.
+    Refusals are also counted split by origin: the retrieval gate (no LLM call)
+    against the model declining in its own words. The refusal scores below merge
+    them, so a reader could not otherwise tell which component refused.
     """
     errors = [r for r in rows if r.get("error")]
     ok = [r for r in rows if not r.get("error")]

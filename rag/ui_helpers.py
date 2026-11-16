@@ -70,7 +70,7 @@ PIPELINE_STEPS_FR = [
 
 # French renderings of the example questions picked from the shipped eval files.
 # Both corpora (Regulation (EU) 2024/1689 and the Apple 10-K) are English, and so
-# are the eval files — they are what the retrieval and answer evaluations measure,
+# are the eval files: they are what the retrieval and answer evaluations measure,
 # and the questions have to be in the documents' language to be a fair test. Only
 # the questions shown as clickable examples are translated, so a French-speaking
 # user sees what they can ask. Keyed by the exact English text: a question added
