@@ -209,14 +209,29 @@ GROQ_MAX_WAIT_S = float(os.getenv("GROQ_MAX_WAIT_S", "65"))
 LLM_CACHE = os.getenv("LLM_CACHE", "1") == "1"
 LLM_CACHE_DIR = INDEX_DIR / "llm_cache"
 
-# Ordered fallback chain used by rag/llm.py. First provider is the configured one.
-# Hugging Face joins the chain only when a token is set: the order is part of
-# the LLM cache key, so listing it unconditionally would invalidate every
-# answer already cached for a setup that never uses it.
-LLM_FALLBACK_ORDER = [
-    p for p in [LLM_PROVIDER, "groq", "openrouter", "huggingface" if HF_TOKEN else "", "ollama"]
-    if p and p not in ("",)
-]
+# The fallback chain keeps the app answering when the configured provider is
+# down or rate-limited. An evaluation needs the opposite: one model per run, or
+# its figures mix models without saying so. LLM_FALLBACK=false pins every call to
+# LLM_PROVIDER, so a rate-limited call fails (an error row, left out of the
+# metrics) instead of being answered by another model.
+LLM_FALLBACK = os.getenv("LLM_FALLBACK", "true").lower() == "true"
+
+
+def fallback_order(provider: str, fallback: bool, hf_token: str) -> list[str]:
+    """Ordered providers rag/llm.py tries; the configured one first.
+
+    Hugging Face joins the chain only when a token is set: the order is part of
+    the LLM cache key, so listing it unconditionally would invalidate every
+    answer already cached for a setup that never uses it. With the default
+    fallback on, the chain is the one the cache was built on.
+    """
+    if not fallback:
+        return [provider]
+    return [p for p in [provider, "groq", "openrouter", "huggingface" if hf_token else "", "ollama"]
+            if p]
+
+
+LLM_FALLBACK_ORDER = fallback_order(LLM_PROVIDER, LLM_FALLBACK, HF_TOKEN)
 
 
 def corpus_dir(corpus: str) -> Path:

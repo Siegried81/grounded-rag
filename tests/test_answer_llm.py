@@ -143,3 +143,22 @@ def test_answers_with_sources(monkeypatch):
     for s in ("[S1]", "[S2]", "Alpha text.", "Beta text.", "a.md", "What?"):
         assert s in seen["prompt"]
     assert "ONLY" in seen["system"]
+
+
+def test_fallback_off_pins_every_call_to_the_configured_provider(monkeypatch):
+    # An evaluation must measure one model: with LLM_FALLBACK=false a
+    # rate-limited Groq call fails instead of being answered by OpenRouter.
+    assert config.fallback_order("groq", True, "") == ["groq", "groq", "openrouter", "ollama"]
+    assert config.fallback_order("groq", True, "t")[3] == "huggingface"
+    assert config.fallback_order("groq", False, "t") == ["groq"]
+    calls = []
+
+    def post(url, **kw):
+        calls.append(url)
+        raise RuntimeError("429")
+
+    monkeypatch.setattr(llm.requests, "post", post)
+    monkeypatch.setattr(config, "LLM_FALLBACK_ORDER", config.fallback_order("groq", False, ""))
+    with pytest.raises(llm.LLMError):
+        llm.complete("hi")
+    assert calls and all("groq" in u for u in calls)
