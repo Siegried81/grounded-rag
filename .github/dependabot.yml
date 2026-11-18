@@ -1,0 +1,39 @@
+# One grouped PR per ecosystem per month, instead of one PR per package.
+# Security fixes are not delayed by this: GitHub opens those as soon as an
+# advisory is published, once security updates are on in the repo settings.
+version: 2
+updates:
+  # requirements*.txt pin floors (`>=`), so Dependabot cannot tell a major from
+  # a patch. A single group without an update-types filter is the only one that
+  # catches everything; CI is what finds a breaking release in it.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule: { interval: "monthly" }
+    open-pull-requests-limit: 1
+    groups: { python-deps: { patterns: ["*"] } }
+
+  - package-ecosystem: "npm"            # web/package.json (Vite UI)
+    directory: "/web"
+    schedule: { interval: "monthly" }
+    open-pull-requests-limit: 2
+    groups:
+      web-deps:  { patterns: ["*"], update-types: ["minor", "patch"] }
+      web-majors: { patterns: ["*"], update-types: ["major"] }
+
+  - package-ecosystem: "github-actions" # .github/workflows/*.yml
+    directory: "/"
+    schedule: { interval: "monthly" }
+    open-pull-requests-limit: 1
+    groups: { actions: { patterns: ["*"] } }
+
+  # CI and the image both run Python 3.12, so the base image only takes 3.12
+  # patch updates. Moving to 3.13 is a deliberate change: bump CI and the
+  # Dockerfile together.
+  - package-ecosystem: "docker"         # base image in Dockerfile
+    directory: "/"
+    schedule: { interval: "monthly" }
+    open-pull-requests-limit: 1
+    ignore:
+      - dependency-name: "python"
+        versions: [">=3.13"]
+    groups: { docker: { patterns: ["*"] } }
