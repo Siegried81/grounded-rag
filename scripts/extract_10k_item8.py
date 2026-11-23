@@ -1,21 +1,24 @@
 """Extract Item 8 (Financial Statements and Supplementary Data) of a 10-K into text sections.
 
-The six sections already in data/filings_sections/ cover the narrative Items; the
+The six sections in data/filings_sections/ cover the narrative Items; the
 numbers live in Item 8, which is HTML tables in the raw SEC submission. This
 script reads the primary 10-K document of that submission, walks its HTML with
-the standard library only, and writes one .txt file per statement or note group.
+the standard library only, and writes one .txt file per statement or note group
+into its own corpus, data/filings_statements/ (kept apart from the narrative
+corpus, see docs/decisions.md, 2026-11-23).
 
 Why the output looks the way it does: a table is flattened to one line per row,
-`label: 2025 | 2024 | 2023`, so a person can read it and the chunker (which
-splits on characters, not on cells) never cuts a number from its label or year.
-Each file starts with the statement's title, the unit stated in the filing
-("in millions, except number of shares, which are reflected in thousands, and
+`label: 2025 | 2024 | 2023`, so a person can read it and the line-aware chunker
+(rag/smart_chunk.py, `chunk_contextual_text`) never cuts a number from its label
+or year. Each file starts with a `Context:` line, which that chunker puts on top
+of every chunk, then the statement's title, the unit stated in the filing ("in
+millions, except number of shares, which are reflected in thousands, and
 per-share amounts") and the year order, because a chunk retrieved alone has to
 say what its numbers mean. Text is copied from the filing, never rewritten.
 
 Usage:
     python scripts/extract_10k_item8.py                       # default paths
-    python scripts/extract_10k_item8.py --raw X.txt --out data/filings_sections
+    python scripts/extract_10k_item8.py --raw X.txt --out data/filings_statements
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_RAW = ROOT / "data" / "filings" / "raw" / "apple_fy2025_10k_sec-submission.txt"
-DEFAULT_OUT = ROOT / "data" / "filings_sections"
+DEFAULT_OUT = ROOT / "data" / "filings_statements"
 
 # (output file, heading that opens the section). A section runs from its heading
 # to the heading of the next entry; the last one runs to the end of Item 8. Every
@@ -249,12 +252,10 @@ def label_columns(lines: list[str]) -> list[str]:
 
 
 def render(name: str, body: list[str]) -> str:
-    """One file's text: a context header, then the body lines."""
+    """One file's text: a `Context:` header line, then the body lines."""
     header = (
-        "Apple Inc. Form 10-K for the fiscal year ended September 27, 2025. "
-        "Part II, Item 8. Financial Statements and Supplementary Data. "
-        "Amounts are in millions of U.S. dollars unless a line says otherwise; "
-        "table rows read `label: 2025 | 2024 | 2023` (fiscal years) unless the columns say otherwise."
+        "Context: Apple Inc. Form 10-K, fiscal year ended September 27, 2025, "
+        "Item 8 (amounts in millions of U.S. dollars unless a line says otherwise)."
     )
     return header + "\n\n" + "\n".join(label_columns(body) if name in PAIRED else body) + "\n"
 

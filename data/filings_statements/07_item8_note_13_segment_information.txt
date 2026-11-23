@@ -1,4 +1,4 @@
-Apple Inc. Form 10-K for the fiscal year ended September 27, 2025. Part II, Item 8. Financial Statements and Supplementary Data. Amounts are in millions of U.S. dollars unless a line says otherwise; table rows read `label: 2025 | 2024 | 2023` (fiscal years) unless the columns say otherwise.
+Context: Apple Inc. Form 10-K, fiscal year ended September 27, 2025, Item 8 (amounts in millions of U.S. dollars unless a line says otherwise).
 
 Note 13 – Segment Information and Geographic Data
 The Company manages its business primarily on a geographic basis. The Company’s CEO is its CODM.

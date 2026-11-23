@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -29,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import config  # noqa: E402
+from rag.answer_metrics import key_fact_present  # noqa: E402
 from rag.embed import get_embedder  # noqa: E402
 from rag.lexical import BM25Index  # noqa: E402
 from rag.logging_utils import never_crash_on_console_encoding  # noqa: E402
@@ -64,6 +66,39 @@ def load_corpus(corpus: str):
     return store, bm25
 
 
+_UNIT_WORDS = re.compile(r"\s*(?:million|billion|thousand)s?\b|[$%]", re.IGNORECASE)
+
+
+def facts_in_passages(item: dict, passages: list[str]) -> bool | None:
+    """True when every key fact of `item` is printed in the retrieved `passages`; None without facts.
+
+    Source-level hits cannot tell a passage that holds the figure from another
+    chunk of the same file (a header, the wrong half of a statement), and that
+    gap is what the Item 8 questions fell into. A figure is matched as the exact
+    digits (units and "$" dropped, so "416,161 million" finds "416,161" and
+    "7.46" does not find "7.49"); a fact that is not a number is matched as
+    words. A figure the question asks to compute (a growth rate, a difference)
+    is printed nowhere, so such questions cap this score below 1.
+    """
+    facts = item.get("key_facts") or []
+    if not facts:
+        return None
+    text = "\n".join(passages)
+    for fact in facts:
+        found = False
+        for alt in [fact] if isinstance(fact, str) else fact:
+            digits = _UNIT_WORDS.sub("", alt).strip()
+            if re.fullmatch(r"[\d,.]+", digits):
+                found = re.search(rf"(?<![\d,.]){re.escape(digits)}(?![\d,]|\.\d)", text) is not None
+            else:
+                found = key_fact_present(alt, text)
+            if found:
+                break
+        if not found:
+            return False
+    return True
+
+
 def format_interval(successes: int, n: int) -> str:
     """"[lo-hi]" for a binomial rate, three decimals, or "[n/a]" without observations."""
     ci = wilson(successes, n)
@@ -89,7 +124,7 @@ def main() -> None:
     items = [it for it in load_eval(eval_file) if it.get("answerable", True)]
 
     print(f"{'question':<60} {'hit@k':>6} {'rec@k':>6} {'rr':>6}")
-    hits, recalls, rrs = [], [], []
+    hits, recalls, rrs, fact_hits = [], [], [], []
     for item in items:
         relevant = set(item.get("relevant_sources") or item["gold_sources"])
         results = retrieve(
@@ -100,6 +135,9 @@ def main() -> None:
         h = hit_rate_at_k(sources, relevant, args.k)
         rec = recall_at_k(sources, relevant, args.k)
         rr = mrr(sources, relevant)
+        found = facts_in_passages(item, [r.chunk.text for r in results])
+        if found is not None:
+            fact_hits.append(found)
         hits.append(h)
         recalls.append(rec)
         rrs.append(rr)
@@ -119,6 +157,12 @@ def main() -> None:
         f"(95% CI {format_interval(n_hits, len(items))}, n={len(items)})  "
         f"MRR={sum(rrs) / n:.3f}"
     )
+    if fact_hits:
+        print(
+            f"facts_in_top_{args.k}={sum(fact_hits) / len(fact_hits):.3f} "
+            f"(95% CI {format_interval(sum(fact_hits), len(fact_hits))}, n={len(fact_hits)}): "
+            "share of questions whose key figures are printed in the retrieved passages"
+        )
 
 
 if __name__ == "__main__":
