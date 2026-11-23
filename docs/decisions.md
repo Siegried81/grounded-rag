@@ -45,8 +45,12 @@ Entries stay when they explain what a number means.
   of 20 right, 4 false refusals, 3 wrong figures) the "gold source" the logs show
   for `f8-05` and `f8-09` was the 291-character header chunk, with no figure in it.
   The gold lists of that file are unchanged except for dropping the MD&A.
-- **Not re-run:** the answer eval on `filings_statements` (needs Groq), the answer
-  and red-team tables (14 October), the FAISS parity of the new index. The
+- **Answers re-run on `filings_statements`** (Groq gpt-oss-120b, 23 November, 22
+  questions): 16 of 20 right (was 12), 1 wrong figure (was 3), 3 refusals where the
+  table was not retrieved (was 4), 2 of 2 unanswerable refused. The fix was
+  retrieval only: same prompt, same model.
+- **Not re-run:** the answer and red-team tables (14 October), the FAISS parity of
+  the new index. The
   re-ranker and MMR variant tables below describe the six-file corpus, which is
   what `filings_sections` is again.
 - **route-or-roam:** unaffected. It reads `filings_sections` and `ai_act_sections`

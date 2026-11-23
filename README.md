@@ -33,7 +33,7 @@ The tool does not replace a legal or financial review.
 | Cites a source that does not exist | Citation validity 1.000 (40 questions) | `[S#]` checked against the retrieved set | None seen |
 | States a wrong figure | `aa-13` caught by the figure check; verify-ok 0.967 | Every figure checked against the cited sources | A figure that is in the source but belongs to another case (`aa-03`) |
 | Instructions hidden in a document | 5/5 passage injections held | Passages fenced as untrusted data | Instructions in the question: red team 18/21 (`leak-02`, `jb-03`, `cite-01`) |
-| Numbers in the financial statements | Figure printed in the 5 passages for 13 of 16 single-figure questions; answers not re-measured yet | Own corpus, tables cut by row with the statement, columns and group on every chunk | First run, before the fix: 12 of 20 right, 4 wrong refusals, 3 wrong figures; the figure check cannot catch a figure from another line |
+| Numbers in the financial statements | 16 of 20 answers right; 1 wrong figure, 3 refusals where the table was not retrieved | Own corpus, tables cut by row with the statement, columns and group on every chunk | The figure check cannot catch a figure from another line (`f8-04` gave a note's cash line, not the balance sheet's) |
 
 The 10-K promise is questions on the text of the annual report, not financial
 analysis. The statements are a separate corpus for looking a figure up and reading
@@ -264,8 +264,11 @@ which holds no figure; with the six text files alone it is 0.300
 ([decisions](docs/decisions.md), 2026-11-23).
 Answers: the 23 November run (`eval/results/answer_eval_item8.jsonl`, gpt-oss-120b on
 Groq) was on that first version: key-fact recall 0.600 (12/20), 4 false refusals, 3
-wrong figures, both unanswerable questions refused, verify-ok 1.000. It has not been
-re-run on `filings_statements`.
+wrong figures, both unanswerable questions refused, verify-ok 1.000. On `filings_statements` (23 November, same model, `eval/results/answer_eval_statements.jsonl`):
+key-fact recall 0.800 (16/20), 0.941 on the 17 answered; 1 wrong figure (`f8-04`,
+cash from a note instead of the balance sheet); 3 refusals where the table was not
+retrieved (gross margin in dollars and as a percentage, net income change); both
+unanswerable questions refused; verify-ok 0.882.
 
 **Phrasings** (`scripts/run_phrasing_eval.py`, k = 5, 8 questions in 3 wordings):
 `hit@5` is 8/8 `original`, 7/8 `casual`, 3/8 `other_language`, and consistency
