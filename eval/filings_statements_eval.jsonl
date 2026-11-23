@@ -1,0 +1,20 @@
+{"question": "What were Apple's total net sales in fiscal 2025?", "relevant_sources": ["07_item8_income_statement.txt", "07_item8_note_13_segment_information.txt", "07_item8_note_2_revenue.txt"]}
+{"question": "What was Apple's net income in fiscal 2025?", "relevant_sources": ["07_item8_cash_flows.txt", "07_item8_comprehensive_income.txt", "07_item8_income_statement.txt", "07_item8_note_3_earnings_per_share.txt", "07_item8_shareholders_equity.txt"]}
+{"question": "What was Apple's diluted earnings per share in fiscal 2025?", "relevant_sources": ["07_item8_income_statement.txt", "07_item8_note_3_earnings_per_share.txt"]}
+{"question": "How much cash and cash equivalents did Apple hold on September 27, 2025?", "relevant_sources": ["07_item8_balance_sheet.txt", "07_item8_cash_flows.txt", "07_item8_note_4_financial_instruments.txt"]}
+{"question": "What were Apple's total assets at the end of fiscal 2025?", "relevant_sources": ["07_item8_balance_sheet.txt"]}
+{"question": "What was Apple's total shareholders' equity at September 27, 2025?", "relevant_sources": ["07_item8_balance_sheet.txt", "07_item8_shareholders_equity.txt"]}
+{"question": "What was Apple's total term debt, current and non-current, at September 27, 2025?", "relevant_sources": ["07_item8_note_9_debt.txt"]}
+{"question": "How much commercial paper did Apple have outstanding at September 27, 2025?", "relevant_sources": ["07_item8_balance_sheet.txt"]}
+{"question": "How much cash did Apple's operating activities generate in fiscal 2025?", "relevant_sources": ["07_item8_cash_flows.txt"]}
+{"question": "How much cash did Apple spend on repurchases of common stock in fiscal 2025?", "relevant_sources": ["07_item8_cash_flows.txt"]}
+{"question": "What was Apple's gross margin in fiscal 2025, in dollars?", "relevant_sources": ["07_item8_income_statement.txt"]}
+{"question": "How much net sales did the iPhone generate in fiscal 2025?", "relevant_sources": ["07_item8_note_2_revenue.txt"]}
+{"question": "What were Apple's net sales in Greater China in fiscal 2025?", "relevant_sources": ["07_item8_note_13_segment_information.txt"]}
+{"question": "How much did Apple spend on research and development in fiscal 2025?", "relevant_sources": ["07_item8_income_statement.txt", "07_item8_note_13_segment_information.txt"]}
+{"question": "How much did Apple pay in dividends and dividend equivalents in fiscal 2025?", "relevant_sources": ["07_item8_cash_flows.txt"]}
+{"question": "How much did Apple spend on property, plant and equipment in fiscal 2025?", "relevant_sources": ["07_item8_cash_flows.txt"]}
+{"question": "By what percentage did Apple's total net sales grow from fiscal 2024 to fiscal 2025?", "relevant_sources": ["07_item8_income_statement.txt"]}
+{"question": "What was Apple's gross margin percentage in fiscal 2025?", "relevant_sources": ["07_item8_income_statement.txt"]}
+{"question": "By how many millions of dollars did Apple's net income increase from fiscal 2024 to fiscal 2025?", "relevant_sources": ["07_item8_income_statement.txt"]}
+{"question": "What was Apple's free cash flow in fiscal 2025, taking operating cash flow minus payments for property, plant and equipment?", "relevant_sources": ["07_item8_cash_flows.txt"]}

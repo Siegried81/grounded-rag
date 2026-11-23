@@ -1,0 +1,14 @@
+Context: Apple Inc. Form 10-K, fiscal year ended September 27, 2025, Item 8 (amounts in millions of U.S. dollars unless a line says otherwise).
+
+Note 3 – Earnings Per Share
+The following table shows the computation of basic and diluted earnings per share for 2025, 2024 and 2023 (net income in millions and shares in thousands):
+2025 | 2024 | 2023
+Numerator:
+Net income: 112,010 | 93,736 | 96,995
+Denominator:
+Weighted-average basic shares outstanding: 14,948,500 | 15,343,783 | 15,744,231
+Effect of dilutive share-based awards: 56,197 | 64,312 | 68,316
+Weighted-average diluted shares: 15,004,697 | 15,408,095 | 15,812,547
+Basic earnings per share: 7.49 | 6.11 | 6.16
+Diluted earnings per share: 7.46 | 6.08 | 6.13
+Approximately 24 million restricted stock units (“RSUs”) were excluded from the computation of diluted earnings per share for 2023 because their effect would have been antidilutive.

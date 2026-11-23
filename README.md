@@ -1,17 +1,62 @@
 # Grounded RAG: cite or refuse
 
-Ask your documents a question and get an answer where every claim cites a passage
+Ask a document set a question and get an answer where every claim cites a passage
 you can read, or an honest "I don't know".
 
-The rule: if no retrieved passage clears the relevance bar, the assistant refuses
-instead of inventing an answer. Every factual sentence points to a numbered source
-`[S1]`, `[S2]`..., and every citation is checked after generation.
+**Who it is for.** Someone who has to answer questions from a long text they did
+not write (a regulation, an annual report) and wants to check each claim against
+the passage it came from. It runs on the EU AI Act (Regulation 2024/1689, 308
+files) and on Apple's FY2025 10-K, which is two corpora: `filings_sections`, the
+text of six Items (6 files), and `filings_statements`, Item 8, the financial
+statements (19 files). You pick the corpus; the app does not route for you.
 
-It runs on two very different corpora: the full English text of Regulation (EU)
-2024/1689 (the EU AI Act), split into 308 files (one per recital, article and
-annex, plus the title and the closing part), and one SEC 10-K (Apple FY2025) split
-into its six Item sections. No vector DB, no RAG framework: each step is one small
-module.
+- AI Act: *Which AI practices are prohibited?* *From what date does this Regulation apply?*
+- Apple 10-K, text: *What fine did the European Commission impose on Apple under the DMA?* *Why is Apple's dependence on iPhone sales a risk factor?*
+- Apple 10-K, statements: *What were Apple's total assets at the end of fiscal 2025?* *How much cash did operating activities generate?*
+
+## What it guarantees, and what it does not
+
+If no passage clears the relevance bar, the assistant refuses. Otherwise every
+factual sentence points to a numbered source `[S1]`, and after generation the code
+checks that each citation exists, that the answer shares vocabulary with it, and
+that every figure in a sentence is in the sources it cites.
+
+**Verified means traceable, not true.** The check cannot tell that a cited passage
+governs another case. In `aa-03` the model quoted EUR 1 500 000 from Article 100
+(fines for Union bodies) as the fine for breaching Article 5 (EUR 35 000 000), and
+the answer passed every check: [the case](#a-wrong-answer-that-passed-verification-aa-03).
+The tool does not replace a legal or financial review.
+
+| Risk | What was measured | Remedy | Still open |
+| --- | --- | --- | --- |
+| Invents an answer when the fact is absent | Model declined 10 of 12 unanswerable questions; `aa-16` answered wrongly | Refusal gate, prompt rule | The gate fired 0 times in 61 questions: cosine cannot separate a missing fact from a present one |
+| Cites a source that does not exist | Citation validity 1.000 (40 questions) | `[S#]` checked against the retrieved set | None seen |
+| States a wrong figure | `aa-13` caught by the figure check; verify-ok 0.967 | Every figure checked against the cited sources | A figure that is in the source but belongs to another case (`aa-03`) |
+| Instructions hidden in a document | 5/5 passage injections held | Passages fenced as untrusted data | Instructions in the question: red team 18/21 (`leak-02`, `jb-03`, `cite-01`) |
+| Numbers in the financial statements | 16 of 20 answers right; 1 wrong figure, 3 refusals where the table was not retrieved | Own corpus, tables cut by row with the statement, columns and group on every chunk | The figure check cannot catch a figure from another line (`f8-04` gave a note's cash line, not the balance sheet's) |
+
+The 10-K promise is questions on the text of the annual report, not financial
+analysis. The statements are a separate corpus for looking a figure up and reading
+the table it sits in; computing a ratio or a difference from them is not
+something the retrieval supports yet (4 of 20 questions need it, and the operands
+came back together for 2 of them). Check any figure against the filing.
+
+**The two repositories.** grounded-rag is the RAG engine; [route-or-roam](https://github.com/Siegried81/route-or-roam)
+is the test bench that compares a workflow and an agent on top of it.
+
+## Stack
+
+- **Language and retrieval**: Python, NumPy store, BM25 (`rank_bm25`), embeddings
+  from Ollama (`nomic-embed-text`), Reciprocal Rank Fusion, MMR. Optional: a
+  cross-encoder re-ranker, FAISS or Qdrant as vector index.
+- **Generation**: Groq `openai/gpt-oss-120b`, with fallbacks to OpenRouter, Hugging
+  Face and Ollama; Azure OpenAI and Azure AI Search as opt-in backends.
+- **Checks**: lexical grounding, figure check, optional NLI entailment; RAGAS scores
+  with an Azure judge.
+- **Interfaces**: FastAPI with a React UI, or Streamlit.
+- **Quality**: pytest, ruff, GitHub Actions, Dependabot.
+- **Packaging and deployment** (last, and optional): Docker, Docker Hub and GitHub
+  Container Registry, Render, Streamlit Community Cloud, Kubernetes manifests.
 
 More: [technical deep dive](docs/technical_deep_dive.md) ·
 [architecture](docs/architecture.md) · [React UI and API](docs/react_ui.md) ·
@@ -123,7 +168,7 @@ HOSTED_EMBED_BASE_URL = "https://openrouter.ai/api/v1"   # any OpenAI-compatible
 HOSTED_EMBED_MODEL = "nvidia/nemotron-3.5-embed-1b:free"
 HOSTED_EMBED_API_KEY = "..."                             # the OpenRouter key
 GROQ_API_KEY = "..."
-AUTO_INGEST = "ai_act_sections,filings_sections"
+AUTO_INGEST = "ai_act_sections,filings_sections,filings_statements"
 ```
 
 `AUTO_INGEST` names the corpora the app indexes itself when the index is missing.
@@ -154,7 +199,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -q
 ```
 
-609 passing and 1 skipped without `faiss-cpu` (610 passing with it), all offline
+632 passing and 1 skipped without `faiss-cpu` (633 passing with it), all offline
 (fake embedder, every HTTP call mocked). `ruff check` runs in CI too. The count
 printed at the end of the run is the current one.
 
@@ -179,7 +224,7 @@ below are kept in [`eval/results/`](eval/results/).
 ## Results
 
 Hybrid retrieval, generation with `openai/gpt-oss-120b` on Groq's free tier, on the
-corpora the repo ships (878 AI Act chunks, 155 10-K chunks). The answer and
+corpora the repo ships (878 AI Act chunks, 155 10-K text chunks, 124 10-K statement chunks). The answer and
 red-team tables are the live run of 14 October 2026, scored with the code of that
 run; verifier changes since then move none of their figures
 ([decisions](docs/decisions.md), 2026-11-08 and 2026-11-22).
@@ -197,6 +242,33 @@ recall@5 1.000 / MRR 0.851; the table stays at k = 3 because it is the harder
 routing test. MMR takes its relevance from the fused rank since 10 November; before,
 MRR was 0.746 and 0.840 (one question each, so noise-sized). Over four documents
 the AI Act MRR had been 0.884: over 308 files it is a real routing test.
+
+**Financial statements** (`filings_statements`, 19 files, 124 chunks, retrieval only,
+`eval/filings_statements_answers_eval.jsonl`, 20 answerable questions: 16 read one
+figure, 4 need a sum, a ratio or a growth rate). Hit rate and MRR use the section
+labels; `facts_in_top_k` is stricter, the share of questions whose key figures are
+printed in the retrieved passages (a computed figure is printed nowhere, so the
+ceiling is 0.80 without arithmetic).
+
+| k | hit_rate (95% CI) | MRR | facts_in_top_k (95% CI) | with `RERANKER=cross_encoder`: hit / MRR / facts |
+| -: | ----------------: | ---: | ----------------------: | -----------------------------------------------: |
+| 1 | 0.550 (0.342-0.742) | 0.550 | 0.400 (0.219-0.613) | 0.600 / 0.600 / 0.300 |
+| 3 | 0.600 (0.387-0.781) | 0.575 | 0.550 (0.342-0.742) | 0.900 / 0.717 / 0.550 |
+| 5 | 0.750 (0.531-0.888) | 0.610 | 0.650 (0.433-0.819) | 0.950 / 0.729 / 0.700 |
+
+At k = 5 the figure is in the passages for 13 of the 16 single-figure questions (the
+misses: commercial paper, gross margin in dollars, dividends paid). The first
+version, with the statements inside `filings_sections` and cut as sentences, scored
+hit@5 0.750 but facts_in_top_5 0.500: a source hit was often the file's header chunk,
+which holds no figure; with the six text files alone it is 0.300
+([decisions](docs/decisions.md), 2026-11-23).
+Answers: the 23 November run (`eval/results/answer_eval_item8.jsonl`, gpt-oss-120b on
+Groq) was on that first version: key-fact recall 0.600 (12/20), 4 false refusals, 3
+wrong figures, both unanswerable questions refused, verify-ok 1.000. On `filings_statements` (23 November, same model, `eval/results/answer_eval_statements.jsonl`):
+key-fact recall 0.800 (16/20), 0.941 on the 17 answered; 1 wrong figure (`f8-04`,
+cash from a note instead of the balance sheet); 3 refusals where the table was not
+retrieved (gross margin in dollars and as a percentage, net income change); both
+unanswerable questions refused; verify-ok 0.882.
 
 **Phrasings** (`scripts/run_phrasing_eval.py`, k = 5, 8 questions in 3 wordings):
 `hit@5` is 8/8 `original`, 7/8 `casual`, 3/8 `other_language`, and consistency

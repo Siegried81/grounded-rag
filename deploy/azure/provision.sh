@@ -85,7 +85,7 @@ az containerapp secret set -g "$RG" -n "$APP_NAME" -o none --secrets \
   "azure-openai-key=keyvaultref:$VAULT_URI/secrets/azure-openai-key,identityref:system" \
   "azure-search-key=keyvaultref:$VAULT_URI/secrets/azure-search-key,identityref:system"
 az containerapp update -g "$RG" -n "$APP_NAME" -o none \
-  --command sh -c "python cli.py ingest --corpus ai_act_sections && python cli.py ingest --corpus filings_sections && exec python -m streamlit run app.py --server.port=8501 --server.address=0.0.0.0" \
+  --command sh -c "python cli.py ingest --corpus ai_act_sections && python cli.py ingest --corpus filings_sections && python cli.py ingest --corpus filings_statements && exec python -m streamlit run app.py --server.port=8501 --server.address=0.0.0.0" \
   --set-env-vars \
     LLM_PROVIDER=azure_openai LLM_FALLBACK=false \
     EMBED_PROVIDER=azure_openai VECTOR_INDEX=azure_search \

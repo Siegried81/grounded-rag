@@ -139,8 +139,8 @@ def test_example_questions_shipped_eval_files_load():
     from config import ROOT
 
     corpora = sorted(p.name for p in (ROOT / "data").iterdir() if p.is_dir())
-    assert corpora == ["ai_act_sections", "filings", "filings_sections"]
-    for name in ("ai_act_sections", "filings_sections"):
+    assert corpora == ["ai_act_sections", "filings", "filings_sections", "filings_statements"]
+    for name in ("ai_act_sections", "filings_sections", "filings_statements"):
         qs = ui.example_questions(ROOT / "eval" / f"{name}_eval.jsonl")
         assert len(qs) == 4 and all(isinstance(q, str) and q for q in qs)
 

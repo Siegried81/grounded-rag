@@ -77,8 +77,8 @@ thousands of chunks this is milliseconds, with two inspectable files.
 its own cosine, so `SCORE_THRESHOLD` keeps its meaning and only recall can change.
 Measured on the shipped indexes (stored vectors as queries, k = 20): top-20
 identical to brute force for 876 of 878 AI Act chunks and 155 of 155 filings
-chunks, score differences at most 3.6e-7. Two misses in 878 is why it stays off
-at this scale.
+chunks (the `filings_statements` index, added later, was not measured). Two misses
+in 878 is why it stays off at this scale.
 
 **Qdrant** (`VECTOR_INDEX=qdrant`, `rag/qdrant_index.py`, off by default). Same
 contract, one collection per store named `<QDRANT_COLLECTION>_<index dir>`
@@ -270,7 +270,8 @@ All four run the app's code path (BM25 loading, configured mode, gate,
 and §8.3 tables are the live run of 14 October 2026 (LLM cache off), scored with
 the code of that run; later verifier changes move none of their figures
 (`docs/decisions.md`). Corpus: the full English Regulation (EU) 2024/1689 in 308
-files, 878 chunks, plus the six 10-K Item sections (155 chunks). Rows:
+files, 878 chunks, plus the 10-K in two corpora: the six narrative Items
+(`filings_sections`, 155 chunks) and Item 8 (`filings_statements`, 19 files, 124 chunks). Rows:
 [`eval/results/`](../eval/results/).
 
 ### 8.1 Retrieval (`rag/metrics.py`)
@@ -293,6 +294,44 @@ relevance from the fused rank; with the old min-max relevance MRR was 0.746 and
 0.840 (`docs/decisions.md`, 2026-11-10). Over four documents the AI Act MRR had
 been 0.884; over 308 files it is a real routing test. One question moves recall by
 about 0.04: read such differences as noise.
+
+**Item 8 (the financial statements), `filings_statements`.**
+`eval/filings_statements_answers_eval.jsonl` has 22 questions, 20 answerable (16 read
+one figure, 4 need a subtraction, a ratio or a growth rate). Its gold is every
+statement or note where the exact figure is printed. The MD&A, which repeats some of
+them, is not in this corpus, so it is not in the gold either (it was while the
+statements shared a corpus with it; see below). Retrieval only
+(`scripts/run_eval.py --corpus filings_statements --eval-file
+eval/filings_statements_answers_eval.jsonl`). Besides the section-level hit rate it
+prints `facts_in_top_k`: the share of questions whose key figures are printed, as
+exact digits, in the retrieved passages. That one was added because a source hit can
+be a chunk with no figure in it.
+
+| k | hit_rate (95% CI) | MRR | facts_in_top_k (95% CI) | + cross-encoder: hit / MRR / facts |
+|--:|---:|---:|---:|---:|
+| 1 | 0.550 (0.342-0.742) | 0.550 | 0.400 (0.219-0.613) | 0.600 / 0.600 / 0.300 |
+| 3 | 0.600 (0.387-0.781) | 0.575 | 0.550 (0.342-0.742) | 0.900 / 0.717 / 0.550 |
+| 5 | 0.750 (0.531-0.888) | 0.610 | 0.650 (0.433-0.819) | 0.950 / 0.729 / 0.700 |
+
+Three things changed between the first attempt (statements added to
+`filings_sections`) and this table, measured on the same 20 questions (k = 5, facts
+in the passages): 0.300 with the six narrative files only (the MD&A prints 6 of the
+20 figures), 0.500 with the statements added and cut as sentences, 0.650 with their
+own corpus and the line-aware chunker. The chunk size is not what matters: from 500
+to 1,200 characters facts@5 stays between 0.55 and 0.65, one question being 0.05. (1) The sentence packer treats a table with no
+punctuation as one sentence, so each statement was one chunk of up to 2,300
+characters and the header paragraph a chunk of its own, boilerplate that ranked high
+for every "Apple fiscal 2025" question and held no figure: `f8-05` and `f8-09` counted
+as source hits on it and were refused by the model. `chunk_contextual_text` packs
+whole rows and puts the context, the statement title, the column line and the nearest
+group heading on every chunk. (2) The statements compete with the narrative corpus
+both ways: the narrative questions lost rank to table chunks (MRR 0.833 to 0.800 at
+k = 3, and still 0.793 with the better chunks in the same corpus), and the numeric
+questions lost to prose. Separate corpora keep the first set at its published figures by
+construction. (3) The cross-encoder helps both sets (narrative MRR 0.833 to 0.940 at
+k = 3, statements hit@5 0.750 to 0.950, facts@5 0.650 to 0.700) but stays opt-in for the reasons of
+2026-10-24. Not done: an automatic router between the two corpora, and arithmetic
+(four questions need it; `f8-19` never gets its two operands).
 
 ### 8.2 Answers (`scripts/run_answer_eval.py`, `rag/answer_metrics.py`)
 

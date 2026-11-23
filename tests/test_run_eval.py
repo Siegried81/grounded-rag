@@ -116,3 +116,53 @@ def test_eval_names_the_reranker_only_when_it_is_on(run_eval, monkeypatch, capsy
     monkeypatch.setattr(run_eval.config, "RERANK_MODEL", "some/cross-encoder")
     _main(run_eval, monkeypatch)
     assert "reranker=some/cross-encoder" in capsys.readouterr().out
+
+
+def test_answers_file_is_accepted_and_unanswerable_rows_are_skipped(run_eval, monkeypatch, capsys):
+    rows = [
+        {"id": "a", "question": "q1?", "answerable": True, "gold_sources": ["a.txt"]},
+        {"id": "b", "question": "q2?", "answerable": False, "gold_sources": []},
+    ]
+    run_eval.eval_file.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    _main(run_eval, monkeypatch)
+    out = capsys.readouterr().out
+    assert "questions=1 " in out and "recall@3=1.000" in out
+
+
+def test_facts_in_passages_matches_exact_figures_not_near_ones(run_eval):
+    facts = run_eval.facts_in_passages
+    item = {"key_facts": [["416,161 million", "$416.2 billion"]]}
+    assert facts(item, ["Total net sales: 416,161 | 391,035 | 383,285"]) is True
+    assert facts(item, ["Total net sales: 4,161 | 391,035"]) is False
+    eps = {"key_facts": [["7.46"]]}
+    assert facts(eps, ["Basic: 7.49 | 6.11", "Diluted: 7.46 | 6.08"]) is True
+    assert facts(eps, ["Basic: 7.49 | 6.11"]) is False  # a 1% tolerance would have said yes
+    assert facts(eps, ["Diluted: 17.46 | 6.08"]) is False
+
+
+def test_facts_in_passages_needs_every_fact_and_ignores_questions_without_any(run_eval):
+    both = {"key_facts": [["10 million"], ["20 million"]]}
+    assert run_eval.facts_in_passages(both, ["a: 10 | 5", "b: 20 | 5"]) is True
+    assert run_eval.facts_in_passages(both, ["a: 10 | 5"]) is False
+    assert run_eval.facts_in_passages({"key_facts": []}, ["x"]) is None
+    assert run_eval.facts_in_passages({}, ["x"]) is None
+    words = {"key_facts": [["China mainland"]]}
+    assert run_eval.facts_in_passages(words, ["in China mainland and India"]) is True
+
+
+def test_eval_prints_the_figures_found_when_the_set_has_key_facts(run_eval, monkeypatch, capsys):
+    monkeypatch.setattr(run_eval.BM25Index, "load", staticmethod(lambda path: "bm25"))
+    row = {"question": "q?", "answerable": True, "gold_sources": ["a.txt"],
+           "key_facts": [["42 million"]]}
+    run_eval.eval_file.write_text(json.dumps(row) + "\n", encoding="utf-8")
+    _main(run_eval, monkeypatch)
+    out = capsys.readouterr().out
+    assert "facts_in_top_3=0.000 (95% CI [0.000-0.793], n=1)" in out  # the fake passage is "t"
+
+
+def test_facts_in_passages_strips_the_unit_before_matching_digits(run_eval):
+    # "35,937" is within 1% of 35,934: a tolerant match would call it found.
+    item = {"key_facts": [["35,934 million"]]}
+    assert run_eval.facts_in_passages(item, ["Total: 35,937 | 18,763"]) is False
+    assert run_eval.facts_in_passages(item, ["Total: 35,934 | 18,763"]) is True
+    assert run_eval.facts_in_passages({"key_facts": [["46.9%"]]}, ["margin 46.9 percent"]) is True

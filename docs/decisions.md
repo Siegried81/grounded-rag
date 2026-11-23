@@ -4,6 +4,73 @@ One entry per decision that still holds: date, what, why, in a few lines. When a
 later change replaces an earlier one, the entry is merged under the latest date.
 Entries stay when they explain what a number means.
 
+## 2026-11-23: Item 8 of the 10-K gets its own corpus, `filings_statements`
+
+- **What:** the 19 files of Item 8 (`scripts/extract_10k_item8.py`) live in
+  `data/filings_statements/` (124 chunks). `filings_sections` is back to the six
+  narrative Items (155 chunks), so its published figures are the ones of 14
+  October again. Files that open with a `Context:` line are cut by
+  `chunk_contextual_text`: whole rows, with the context, the statement title, the
+  column line and the nearest group heading on every chunk. Other corpora are
+  chunked as before. `run_eval.py` prints `facts_in_top_k`, the share of questions
+  whose key figures are printed in the retrieved passages. The eval file is
+  `eval/filings_statements_answers_eval.jsonl` (22 questions; `05_mdna.txt` removed
+  from the gold because that corpus no longer holds it). `fs-15` is the original
+  question again (net income for fiscal 2025, unanswerable in the text corpus).
+- **Why:** adding Item 8 to `filings_sections` lowered the published text figures
+  (k = 3 MRR 0.833 to 0.800; k = 5 recall 1.000 to 0.980, MRR 0.851 to 0.818).
+  Checked on the same questions: "reportable operating segments" is a labelling
+  artefact, because Note 13 does state the five segments, so the new file is a fair
+  answer (gold left as it was); "fiscal year end" and "full-time equivalent
+  employees" are real losses (rank 1 to 2 and 2 to 4; Note 1 does define the fiscal
+  year but sat outside the top 5, and the employee count is only in Item 1). The causes were the header paragraph of each
+  Item 8 file, which became a boilerplate chunk matching every "Apple fiscal 2025"
+  question, and statements cut as one 2,300-character chunk.
+- **Numbers** (retrieval, no LLM; labels of the 25 text questions untouched). Text
+  set, `filings_sections`, hybrid: 6 files k = 3 recall 0.900, MRR 0.833, hit 0.920;
+  k = 5 recall 1.000, MRR 0.851. With Item 8 added raw (246 chunks): 0.900, 0.800,
+  0.920; 0.980, 0.818. Same questions with Item 8 added and cut by row: MRR 0.793
+  at k = 3, so the chunking alone does not give the text set back. Now: 0.900,
+  0.833, 0.920; 1.000, 0.851, by construction. Statements set (20 questions,
+  `facts_in_top_5`): 0.300 with the six files only (the MD&A prints 6 of the
+  figures), 0.500 added raw, 0.650 own corpus (95% CI 0.433-0.819). Own corpus,
+  k = 1 / 3 / 5: hit 0.550 / 0.600 / 0.750, facts 0.400 / 0.550 / 0.650. Ceiling
+  0.800: four questions have a figure no statement prints (`f8-17` to `f8-20`:
+  three computed, one only in the MD&A). With `RERANKER=cross_encoder` (left off,
+  see 2026-10-24): text set MRR 0.833 to 0.940, recall@3 0.900 to 1.000;
+  statements hit@5 0.750 to 0.950, facts@5 0.650 to 0.700. Chunk sizes from 500 to
+  1,200 characters give facts@5 0.55 to 0.65, so 900 (`CHUNK_SIZE`) stays. AI Act
+  and phrasing figures unchanged.
+- **Source hits mislead:** in the first answer run (Groq gpt-oss-120b, 23 November, 12
+  of 20 right, 4 false refusals, 3 wrong figures) the "gold source" the logs show
+  for `f8-05` and `f8-09` was the 291-character header chunk, with no figure in it.
+  The gold lists of that file are unchanged except for dropping the MD&A.
+- **Answers re-run on `filings_statements`** (Groq gpt-oss-120b, 23 November, 22
+  questions): 16 of 20 right (was 12), 1 wrong figure (was 3), 3 refusals where the
+  table was not retrieved (was 4), 2 of 2 unanswerable refused. The fix was
+  retrieval only: same prompt, same model.
+- **Not re-run:** the answer and red-team tables (14 October), the FAISS parity of
+  the new index. The
+  re-ranker and MMR variant tables below describe the six-file corpus, which is
+  what `filings_sections` is again.
+- **route-or-roam:** unaffected. It reads `filings_sections` and `ai_act_sections`
+  only, and the first is the six files its gold was located on. Its 301 tests pass
+  against this repo and `python -m eval.locate_gold` finds 0 missing gold sources in
+  40 questions. It has no tool for `filings_statements`.
+- **Decision:** the README keeps the 10-K promise on the text and offers the
+  statements as a second corpus to look figures up in, not as financial analysis.
+  The app does not route between the two corpora yet.
+
+## 2026-11-23: Locked dependencies for the image and CI
+
+- **What:** `requirements.lock` (uv, Python 3.12, Linux) is what the Dockerfile
+  and CI install. `requirements.txt` stays the readable list of floors.
+  `config.py` also loads only this repo's own `.env`.
+- **Why:** the image and CI resolved the floors on their own and could drift
+  apart; route-or-roam already installs a lock. A bare `load_dotenv()` let a
+  worktree read a parent folder's `.env`.
+- **Effect:** no published number changes.
+
 ## 2026-10-14: Answer and red-team evaluations re-run live
 
 - **What:** the retrieval, phrasing, answer and red-team evaluations were re-run

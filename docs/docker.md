@@ -31,11 +31,13 @@ docker compose --profile local-llm up -d ollama
 docker compose --profile local-llm exec ollama ollama pull nomic-embed-text
 docker compose --profile tools --profile local-llm run --rm ingest --corpus ai_act_sections
 docker compose --profile tools --profile local-llm run --rm ingest --corpus filings_sections
+docker compose --profile tools --profile local-llm run --rm ingest --corpus filings_statements
 ```
 
 Arguments after `ingest` replace the default `--corpus ai_act_sections`, because
 the service's entrypoint is `python cli.py ingest`. The corpora are
-`ai_act_sections` and `filings_sections`. `data/filings/` only holds the raw SEC
+`ai_act_sections`, `filings_sections` (the narrative Items of the 10-K) and
+`filings_statements` (Item 8, the financial statements). `data/filings/` only holds the raw SEC
 submission as provenance: it is not ingested, and `.dockerignore` keeps its 9.5 MB
 out of the image.
 
@@ -102,8 +104,11 @@ Linux too; Docker Desktop provides it natively.
 
 - **`python:3.12-slim`**: small, and every dependency ships as a wheel, so no
   build toolchain is needed.
-- **Dependencies before code**: `requirements.txt` is installed in its own
-  layer; editing Python files only rebuilds the final copy layer.
+- **Dependencies before code**: `requirements.lock` is installed in its own
+  layer; editing Python files only rebuilds the final copy layer. The lock pins
+  every package for Python 3.12 on Linux, the same versions CI tests;
+  `requirements.txt` stays the readable list. To refresh it:
+  `docker run --rm -v "$PWD:/w" -w /w python:3.12-slim sh -c "pip install -q uv && uv pip compile requirements.txt --python-version 3.12 --python-platform x86_64-manylinux_2_28 -o requirements.lock"`.
 - **Non-root user (uid 10001)**: limits what a compromised dependency could do.
   `index/` and `logs/` are created and owned by that user so fresh named volumes
   inherit write access.
@@ -114,7 +119,7 @@ Linux too; Docker Desktop provides it natively.
   root, the requirements lists excepted), so an image built from a local
   checkout holds the same files as the one CI builds. It also leaves out
   `data/filings/raw/` (provenance only, never ingested) and the test tools: the
-  image installs `requirements.txt`, not `requirements-dev.txt`.
+  image installs `requirements.lock`, not `requirements-dev.txt`.
 - **Corpora mounted read-only**: `./data` is input. Mounting it `:ro` means neither
   the app nor ingestion can modify the documents answers are grounded on, and
   adding a document needs no rebuild, only a re-ingest.

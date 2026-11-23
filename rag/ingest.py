@@ -71,11 +71,18 @@ def _chunk_file(path: Path, corpus: str, chunker: str):
 
     Uses the sentence-aware splitter by default (better passages and citations),
     falling back to the original fixed-character splitter when chunker == "char".
+    A file that opens with a `Context:` line (the flattened financial statements)
+    is packed by lines instead, with its context and title on every chunk.
     A chunk's id and ordinal depend only on its own file, which is what lets an
     incremental ingest reuse an unchanged file's chunks as they are.
     """
     from rag.chunk import chunk_text
-    from rag.smart_chunk import chunk_pages, smart_chunk_text
+    from rag.smart_chunk import (
+        chunk_contextual_text,
+        chunk_pages,
+        has_context_header,
+        smart_chunk_text,
+    )
 
     source = path.name
     if path.suffix.lower() == ".pdf":
@@ -86,6 +93,8 @@ def _chunk_file(path: Path, corpus: str, chunker: str):
         return []
     if chunker == "char":
         return chunk_text(text, source, corpus)
+    if has_context_header(text):
+        return chunk_contextual_text(text, source, corpus)
     return smart_chunk_text(text, source, corpus)
 
 
