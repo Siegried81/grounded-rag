@@ -1,17 +1,58 @@
 # Grounded RAG: cite or refuse
 
-Ask your documents a question and get an answer where every claim cites a passage
+Ask a document set a question and get an answer where every claim cites a passage
 you can read, or an honest "I don't know".
 
-The rule: if no retrieved passage clears the relevance bar, the assistant refuses
-instead of inventing an answer. Every factual sentence points to a numbered source
-`[S1]`, `[S2]`..., and every citation is checked after generation.
+**Who it is for.** Someone who has to answer questions from a long text they did
+not write (a regulation, an annual report) and wants to check each claim against
+the passage it came from. It runs on two corpora: the EU AI Act (Regulation
+2024/1689, 308 files) and Apple's FY2025 10-K (25 files: the text Items plus
+Item 8, the financial statements).
 
-It runs on two very different corpora: the full English text of Regulation (EU)
-2024/1689 (the EU AI Act), split into 308 files (one per recital, article and
-annex, plus the title and the closing part), and one SEC 10-K (Apple FY2025) split
-into its six Item sections. No vector DB, no RAG framework: each step is one small
-module.
+- AI Act: *Which AI practices are prohibited?* *From what date does this Regulation apply?*
+- Apple 10-K: *What fine did the European Commission impose on Apple under the DMA?* *Why is Apple's dependence on iPhone sales a risk factor?*
+
+## What it guarantees, and what it does not
+
+If no passage clears the relevance bar, the assistant refuses. Otherwise every
+factual sentence points to a numbered source `[S1]`, and after generation the code
+checks that each citation exists, that the answer shares vocabulary with it, and
+that every figure in a sentence is in the sources it cites.
+
+**Verified means traceable, not true.** The check cannot tell that a cited passage
+governs another case. In `aa-03` the model quoted EUR 1 500 000 from Article 100
+(fines for Union bodies) as the fine for breaching Article 5 (EUR 35 000 000), and
+the answer passed every check: [the case](#a-wrong-answer-that-passed-verification-aa-03).
+The tool does not replace a legal or financial review.
+
+| Risk | What was measured | Remedy | Still open |
+| --- | --- | --- | --- |
+| Invents an answer when the fact is absent | Model declined 10 of 12 unanswerable questions; `aa-16` answered wrongly | Refusal gate, prompt rule | The gate fired 0 times in 61 questions: cosine cannot separate a missing fact from a present one |
+| Cites a source that does not exist | Citation validity 1.000 (40 questions) | `[S#]` checked against the retrieved set | None seen |
+| States a wrong figure | `aa-13` caught by the figure check; verify-ok 0.967 | Every figure checked against the cited sources | A figure that is in the source but belongs to another case (`aa-03`) |
+| Instructions hidden in a document | 5/5 passage injections held | Passages fenced as untrusted data | Instructions in the question: red team 18/21 (`leak-02`, `jb-03`, `cite-01`) |
+| Numbers in the financial statements | Retrieval hit@5 0.750 on 20 questions (see below) | Tables flattened to `label: 2025 \| 2024 \| 2023` | Answers on these questions not scored yet |
+
+The 10-K promise is questions on the text of the annual report. The statements are
+indexed, but the right table is found 3 times in 4, so check any figure against the
+filing.
+
+**The two repositories.** grounded-rag is the RAG engine; [route-or-roam](https://github.com/Siegried81/route-or-roam)
+is the test bench that compares a workflow and an agent on top of it.
+
+## Stack
+
+- **Language and retrieval**: Python, NumPy store, BM25 (`rank_bm25`), embeddings
+  from Ollama (`nomic-embed-text`), Reciprocal Rank Fusion, MMR. Optional: a
+  cross-encoder re-ranker, FAISS or Qdrant as vector index.
+- **Generation**: Groq `openai/gpt-oss-120b`, with fallbacks to OpenRouter, Hugging
+  Face and Ollama; Azure OpenAI and Azure AI Search as opt-in backends.
+- **Checks**: lexical grounding, figure check, optional NLI entailment; RAGAS scores
+  with an Azure judge.
+- **Interfaces**: FastAPI with a React UI, or Streamlit.
+- **Quality**: pytest, ruff, GitHub Actions, Dependabot.
+- **Packaging and deployment** (last, and optional): Docker, Docker Hub and GitHub
+  Container Registry, Render, Streamlit Community Cloud, Kubernetes manifests.
 
 More: [technical deep dive](docs/technical_deep_dive.md) ·
 [architecture](docs/architecture.md) · [React UI and API](docs/react_ui.md) ·
@@ -154,7 +195,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -q
 ```
 
-609 passing and 1 skipped without `faiss-cpu` (610 passing with it), all offline
+618 passing and 1 skipped without `faiss-cpu` (619 passing with it), all offline
 (fake embedder, every HTTP call mocked). `ruff check` runs in CI too. The count
 printed at the end of the run is the current one.
 
@@ -197,6 +238,12 @@ recall@5 0.980 / MRR 0.818; the table stays at k = 3 because it is the harder
 routing test. MMR takes its relevance from the fused rank since 10 November; before,
 MRR was 0.746 and 0.840 (one question each, so noise-sized). Over four documents
 the AI Act MRR had been 0.884: over 308 files it is a real routing test.
+
+**Financial statements** (Item 8, retrieval only, `eval/filings_item8_answers_eval.jsonl`,
+20 answerable questions: 16 read one figure, 4 need a sum, a ratio or a growth rate):
+hit_rate@1 0.350, @3 0.700 (95% CI 0.481-0.855), @5 0.750 (0.531-0.888), MRR 0.508
+at k = 3. Table lines such as "total assets" carry few distinctive words, so the MD&A
+and the notes often rank above the statement. The answers are not scored yet.
 
 **Phrasings** (`scripts/run_phrasing_eval.py`, k = 5, 8 questions in 3 wordings):
 `hit@5` is 8/8 `original`, 7/8 `casual`, 3/8 `other_language`, and consistency
