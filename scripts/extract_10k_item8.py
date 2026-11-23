@@ -148,7 +148,7 @@ def _row_to_line(cells: list[str]) -> str:
     for c in cells:
         if not c:
             continue
-        if c in ("$", "(") and merged is not None:
+        if c in ("$", "("):
             merged.append(c)
             continue
         if c in (")", "%", ")%") and merged:

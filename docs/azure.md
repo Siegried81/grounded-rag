@@ -149,4 +149,4 @@ az group delete -n rg-grounded-rag --yes   # stop every cost
 
 The app scales to zero. Each cold start builds the indexes again, like the
 Render deployment, which takes a few minutes. The image must contain the Azure
-code, so publish a new image after this branch is merged.
+code, so build and publish the image from a commit that has it.

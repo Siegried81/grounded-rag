@@ -11,8 +11,8 @@ Both UIs read the same `.env` and indexes, so they behave identically.
 
 ## Prerequisites
 
-- The Python venv with `requirements.txt` installed (it now includes `fastapi`,
-  `uvicorn` and `httpx`).
+- The Python venv with `requirements.txt` installed (it includes `fastapi` and
+  `uvicorn`; `httpx`, which the API tests need, is in `requirements-dev.txt`).
 - Node.js 18+ and npm, for the React app only.
 - At least one built index (`python cli.py ingest --corpus ai_act_sections`).
 

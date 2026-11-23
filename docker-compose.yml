@@ -76,7 +76,7 @@ services:
     <<: *app-common
     profiles: ["tools"]
     # One-shot: builds the index for one corpus and exits. Arguments after the
-    # service name replace `command`, e.g. `run --rm ingest --corpus filings`.
+    # service name replace `command`, e.g. `run --rm ingest --corpus filings_sections`.
     entrypoint: ["python", "cli.py", "ingest"]
     command: ["--corpus", "ai_act_sections"]
     restart: "no"

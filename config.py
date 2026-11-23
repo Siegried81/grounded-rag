@@ -167,7 +167,7 @@ STREAM_ANSWERS = os.getenv("STREAM_ANSWERS", "true").lower() == "true"
 
 # --- Embedding backend -------------------------------------------------------
 EMBED_PROVIDER = os.getenv("EMBED_PROVIDER", "ollama")
-# ollama | hosted | sentence_transformers | fake
+# ollama | hosted | azure_openai | sentence_transformers | fake
 #
 # `sentence_transformers` runs the model IN-PROCESS instead of calling a
 # daemon: one less thing to be down during a demo, and no HTTP round trip per
@@ -285,7 +285,7 @@ LLM_FALLBACK_ORDER = fallback_order(LLM_PROVIDER, LLM_FALLBACK, HF_TOKEN, AZURE_
 
 
 def corpus_dir(corpus: str) -> Path:
-    """Folder holding the raw documents for a corpus (e.g. data/ai_act)."""
+    """Folder holding the raw documents for a corpus (e.g. data/ai_act_sections)."""
     return DATA_DIR / corpus
 
 
