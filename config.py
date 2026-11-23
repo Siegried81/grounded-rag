@@ -14,10 +14,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 # --- Paths -------------------------------------------------------------------
 ROOT = Path(__file__).resolve().parent
+
+# Only this repo's own .env is read. A bare load_dotenv() walks up the folder
+# tree, so a checkout with no .env of its own (a worktree) would silently pick
+# up a parent folder's .env holding another project's keys and URLs.
+load_dotenv(ROOT / ".env")
+
 DATA_DIR = ROOT / "data"       # one subfolder per corpus, e.g. data/ai_act
 INDEX_DIR = ROOT / "index"     # persisted vector stores, one subfolder per corpus
 
