@@ -3,10 +3,12 @@
 # Why it is built this way:
 # - python:3.12-slim: small Debian base with wheels available for every
 #   dependency in requirements.txt (numpy, pypdf...), so no compiler is needed.
-# - requirements.txt is copied and installed BEFORE the source code, so editing
+# - requirements.lock is copied and installed BEFORE the source code, so editing
 #   code only rebuilds the last, cheap layer instead of reinstalling packages.
-#   Only runtime packages are in it: pytest, ruff and debugpy are in
-#   requirements-dev.txt, which the image never installs.
+#   It pins every runtime package (and its dependencies) to the versions CI
+#   tests; requirements.txt stays the readable list of what is supported.
+#   pytest, ruff and debugpy are in requirements-dev.txt, which the image never
+#   installs.
 # - The app runs as an unprivileged user: a compromised dependency or a prompt
 #   gone wrong cannot write outside the folders that user owns.
 # - Secrets (.env), the local venv, built indexes, caches and logs are excluded
@@ -23,9 +25,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Dependency layer: cached until requirements.txt changes.
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+# Dependency layer: cached until requirements.lock changes.
+COPY requirements.lock .
+RUN pip install -r requirements.lock
 
 # Non-root user. index/ and logs/ are created and owned by it so the named
 # volumes mounted there inherit that ownership on first use.

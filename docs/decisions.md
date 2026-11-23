@@ -4,6 +4,16 @@ One entry per decision that still holds: date, what, why, in a few lines. When a
 later change replaces an earlier one, the entry is merged under the latest date.
 Entries stay when they explain what a number means.
 
+## 2026-11-23: Locked dependencies for the image and CI
+
+- **What:** `requirements.lock` (uv, Python 3.12, Linux) is what the Dockerfile
+  and CI install. `requirements.txt` stays the readable list of floors.
+  `config.py` also loads only this repo's own `.env`.
+- **Why:** the image and CI resolved the floors on their own and could drift
+  apart; route-or-roam already installs a lock. A bare `load_dotenv()` let a
+  worktree read a parent folder's `.env`.
+- **Effect:** no published number changes.
+
 ## 2026-10-14: Answer and red-team evaluations re-run live
 
 - **What:** the retrieval, phrasing, answer and red-team evaluations were re-run
