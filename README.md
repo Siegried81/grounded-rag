@@ -31,11 +31,12 @@ The tool does not replace a legal or financial review.
 | Cites a source that does not exist | Citation validity 1.000 (40 questions) | `[S#]` checked against the retrieved set | None seen |
 | States a wrong figure | `aa-13` caught by the figure check; verify-ok 0.967 | Every figure checked against the cited sources | A figure that is in the source but belongs to another case (`aa-03`) |
 | Instructions hidden in a document | 5/5 passage injections held | Passages fenced as untrusted data | Instructions in the question: red team 18/21 (`leak-02`, `jb-03`, `cite-01`) |
-| Numbers in the financial statements | Retrieval hit@5 0.750 on 20 questions (see below) | Tables flattened to `label: 2025 \| 2024 \| 2023` | Answers on these questions not scored yet |
+| Numbers in the financial statements | 12 of 20 answers right (retrieval hit@5 0.750) | Tables flattened to `label: 2025 \| 2024 \| 2023` | 4 wrong refusals and 3 wrong figures on 20 questions |
 
-The 10-K promise is questions on the text of the annual report. The statements are
-indexed, but the right table is found 3 times in 4, so check any figure against the
-filing.
+The 10-K promise is questions on the text of the annual report, not financial
+analysis. The statements are indexed, but on 20 questions about them 12 answers
+were right, 4 refused although the figure is there and 3 gave a wrong figure
+(another line or the MD&A's rounded number). Check any figure against the filing.
 
 **The two repositories.** grounded-rag is the RAG engine; [route-or-roam](https://github.com/Siegried81/route-or-roam)
 is the test bench that compares a workflow and an agent on top of it.
@@ -243,7 +244,12 @@ the AI Act MRR had been 0.884: over 308 files it is a real routing test.
 20 answerable questions: 16 read one figure, 4 need a sum, a ratio or a growth rate):
 hit_rate@1 0.350, @3 0.700 (95% CI 0.481-0.855), @5 0.750 (0.531-0.888), MRR 0.508
 at k = 3. Table lines such as "total assets" carry few distinctive words, so the MD&A
-and the notes often rank above the statement. The answers are not scored yet.
+and the notes often rank above the statement.
+Answers (gpt-oss-120b on Groq, 23 November, `eval/results/answer_eval_item8.jsonl`): key-fact
+recall 0.600 (12/20), 0.750 on the 16 answered; 4 false refusals (net income, total
+assets, operating cash flow, net income change), 3 wrong figures (cash, buybacks,
+capital spending), both unanswerable questions refused. Verify-ok was 1.000: every
+wrong figure was in a cited source, so the check cannot catch this kind of error.
 
 **Phrasings** (`scripts/run_phrasing_eval.py`, k = 5, 8 questions in 3 wordings):
 `hit@5` is 8/8 `original`, 7/8 `casual`, 3/8 `other_language`, and consistency

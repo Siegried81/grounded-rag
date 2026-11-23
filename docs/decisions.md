@@ -20,8 +20,15 @@ Entries stay when they explain what a number means.
   "employees"). AI Act, phrasing (hit@5 8/8, 7/8, 3/8) and consistency 3/8 are
   unchanged. FAISS parity on filings: 155 of 155 became 245 of 246.
 - **Not re-run:** the answer and red-team tables (14 October, 6-file corpus) and the
-  re-ranker and MMR variant tables below, which describe the old corpus. The Item 8
-  questions score 0.750 hit@5 on retrieval; their answers are not scored yet.
+  re-ranker and MMR variant tables below, which describe the old corpus.
+- **Answers on Item 8** (Groq gpt-oss-120b, 22 questions, 23 November): 12 of 20
+  right, 4 false refusals, 3 wrong figures, 2 of 2 unanswerable refused. The first
+  scoring said 3 of 20 because the key facts lacked their unit: "416,161" read as
+  a plain number against the answer's "$416,161 million". The facts now carry
+  "million"; scores recomputed from the logged answers, no new call.
+- **Decision:** the README does not promise financial analysis. Retrieval finds the
+  right table 3 times in 4 and the figure check passes wrong figures that come from
+  another line of a cited source.
 
 ## 2026-11-23: Locked dependencies for the image and CI
 
