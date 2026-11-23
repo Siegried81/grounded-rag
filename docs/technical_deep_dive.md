@@ -77,8 +77,8 @@ thousands of chunks this is milliseconds, with two inspectable files.
 its own cosine, so `SCORE_THRESHOLD` keeps its meaning and only recall can change.
 Measured on the shipped indexes (stored vectors as queries, k = 20): top-20
 identical to brute force for 876 of 878 AI Act chunks and 155 of 155 filings
-chunks (the `filings_statements` index, added later, was not measured). Two misses
-in 878 is why it stays off at this scale.
+chunks, and 124 of 124 for `filings_statements`. Two misses in 878 is why it stays
+off at this scale.
 
 **Qdrant** (`VECTOR_INDEX=qdrant`, `rag/qdrant_index.py`, off by default). Same
 contract, one collection per store named `<QDRANT_COLLECTION>_<index dir>`
@@ -157,8 +157,8 @@ it, is meaningless and nothing fails. The API reports it as `error.kind: "index"
 
 **One call, no agent.** `llm.complete(prompt, system=...)` is a single-shot chat
 call at `temperature=0`. Providers are tried in order (`groq`, `openrouter`,
-`ollama`; `huggingface` before `ollama` when `HF_TOKEN` is set), skipping any
-without a key, and `LLMError` is raised only if all fail, with each reason. The
+`ollama`; `huggingface` and `azure_openai` before `ollama` when `HF_TOKEN` or
+`AZURE_OPENAI_API_KEY` is set), skipping any without a key, and `LLMError` is raised only if all fail, with each reason. The
 default model is `openai/gpt-oss-120b` on Groq; Groq retired the Llama 3.x models
 the project started with.
 
@@ -333,6 +333,14 @@ k = 3, statements hit@5 0.750 to 0.950, facts@5 0.650 to 0.700) but stays opt-in
 2026-10-24. Not done: an automatic router between the two corpora, and arithmetic
 (four questions need it; `f8-19` never gets its two operands).
 
+Answers on this corpus (23 November, `gpt-oss-120b`, 22 questions,
+`eval/results/answer_eval_statements.jsonl`): the scorer reports key-fact recall
+0.800 (16/20), 0.941 on the 17 answered, verify-ok 0.882. Read strictly it is 15 of
+20: for `f8-15` (dividends paid) the model quoted the dividends declared, 15,413 for
+15,421, and the 1% tolerance of the key-fact match let it through (it is the only
+stored answer that matches by tolerance alone). The chunking was tuned on these 20
+questions, so none of this is held out.
+
 ### 8.2 Answers (`scripts/run_answer_eval.py`, `rag/answer_metrics.py`)
 
 Sets: `eval/*_answers_eval.jsonl`, 20 questions per corpus, 14 answerable (1 to 3
@@ -394,7 +402,7 @@ Reproduce the aggregates from the stored rows with
   answerable questions long before it caught these. What caught them is the
   prompt: `fs-15` ("What was Apple's net income for fiscal 2025?") has a top
   passage at 0.811 and the answer "I do not know." The gate has fired zero times
-  over 61 live questions (40 here, 21 in §8.3).
+  over 83 live questions (40 here, 21 in §8.3, 22 on the statements).
 - **Recall 0.667 on the AI Act side.** `aa-16` (Annex III dates postponed?) is a
   real over-answer: the model read Article 111's transitional provisions as a
   postponement, and `verify_ok` is true. `aa-17` is a scoring artefact: the model
@@ -485,8 +493,8 @@ What this says:
   Rows: `eval/results/redteam_guard_off.jsonl` and `redteam_guard_on.jsonl`.
 - All three out-of-scope and both personal-data cases refuse, but the model did
   it, not the gate (0/10).
-- The output check of §6 flags only the two `leak-02` answers among 757 stored in
-  both repos; re-scoring the stored run gives 19/21, with no new live run.
+- The output check of §6 flags only the two `leak-02` answers among the 187 stored in
+  `eval/results/`; re-scoring the stored run gives 19/21, with no new live run.
 
 ### 8.4 Query log (`rag/logging_utils.py`)
 
@@ -612,7 +620,7 @@ it has touched a real Azure resource.
 - **Citation formats are pattern-matched.** A new form would count as uncited until
   the pattern is extended; the answer eval is what surfaces it.
 - **A similarity threshold cannot detect a missing fact.** The central negative
-  result: the gate fired zero times over 61 live questions and no `SCORE_THRESHOLD`
+  result: the gate fired zero times over 83 live questions and no `SCORE_THRESHOLD`
   separates the sets (§8.2). What held is the prompt: the model declined 10 of 12,
   an instruction followed, not an invariant enforced, and the first thing to degrade
   on a smaller model. The gate keeps a narrower job, truly off-topic input; hence

@@ -8,8 +8,11 @@ limitation) is in [`technical_deep_dive.md`](technical_deep_dive.md).
 **Ingestion (offline, `rag/ingest.py`)**
 
 1. **Chunk** (`rag/smart_chunk.py`): documents are split into sentence-aware
-   passages (`chunk.py` is a fixed-character fallback). PDFs are chunked page by
-   page so a citation can name a page. Each `Chunk` records its source and ordinal.
+   passages (`chunk.py` is a fixed-character fallback). A file that opens with a
+   `Context:` line (the flattened financial statements) is packed by whole rows
+   instead, with its context, title and column line on every chunk. PDFs are
+   chunked page by page so a citation can name a page. Each `Chunk` records its
+   source and ordinal.
 2. **Embed** (`rag/embed.py` + `rag/cache.py`): chunk texts become vectors via an
    `Embedder` (Ollama / hosted / in-process sentence-transformers / fake). An on-disk cache means unchanged passages
    are never re-embedded.
@@ -53,7 +56,7 @@ but ungrounded text; too high → answerable questions refused). It is one value
 in `config.py`, chosen with `nomic-embed-text` and not calibrated on any other
 embedding model.
 
-**What the gate does not do.** It has never fired over 61 live questions: no
+**What the gate does not do.** It has never fired over 83 live questions: no
 threshold separates answerable from unanswerable questions, because cosine measures
 topic, not whether a fact is present. What refuses in practice is the model
 following the "answer only from the sources" instruction, so both live reports print

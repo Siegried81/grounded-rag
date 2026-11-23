@@ -4,6 +4,70 @@ One entry per decision that still holds: date, what, why, in a few lines. When a
 later change replaces an earlier one, the entry is merged under the latest date.
 Entries stay when they explain what a number means.
 
+## 2026-11-23: Every published figure recomputed against the code
+
+- **What:** the numbers of the README, the docs, the docstrings and the comments
+  were rederived: chunk and file counts from the chunker (no embedding), retrieval
+  and phrasing tables by running the scripts on Ollama embeddings, the answer and
+  red-team tables by scoring the stored rows with today's `rag/answer_metrics.py`
+  and `scripts/run_redteam.py`, the test count with CI's own commands in a
+  `python:3.12-slim` container (632 passed, 1 skipped before this pass). No LLM was
+  called.
+- **Held:** retrieval at k = 3 and 5, the statements table at k = 1, 3, 5, phrasings
+  (8/8, 7/8, 3/8, consistency 3/8), the answer table (all three columns), the red
+  team 18/21 and its per-category rows, the guard on/off pair (19/21 and 21/21), the
+  re-score of 19/21 with the output check, the NLI counts (11/27, 22/27, 27/27,
+  entailed fraction 0.25), the aa-03 row, the FAISS parity (876 of 878, 155 of 155),
+  the Wilson intervals, `facts_in_top_k` with the six text files alone (0.300), the
+  first-version chunk figures (246 chunks, 2,303 characters, 291-character header,
+  from commit 4fed587), and the extractor, which regenerates the 19 statement files
+  byte for byte.
+- **Changed:**
+  - `f8-15` (dividends paid) was scored right with 15,413 (dividends declared) for
+    15,421 because the key-fact match tolerates 1%. It is the only stored answer
+    that matches by tolerance alone. Statements answers are 16 of 20 by the scorer
+    and 15 read strictly, with 2 wrong figures (`f8-04`, `f8-15`), not 1. The
+    tolerance is left as it is: it is what lets "$416.2 billion" match 416,161
+    million. A rounding-aware match is a metric change and stays open.
+  - "The gate fired 0 times in 61 questions" is 83: the 22 statements questions did
+    not fire it either.
+  - The answer table is not the one today's retrieval would produce. 25 of its 40
+    questions now get another top 5 (16 reordered, 9 with another set); the gold
+    source is still retrieved for all 28 answerable ones. Refusals, key facts and
+    citations rescore identically from the stored answers; grounding and verify-ok
+    cannot be recomputed because that run kept no passages.
+  - "757 stored answers" is 187 for `eval/results/`; the 757 included local logs
+    and the other repo.
+  - FAISS parity on `filings_statements`: 124 of 124 lists identical.
+  - The French UI showed English examples on `filings_statements`; four renderings
+    added, and the test now covers the three corpora.
+  - `run_ragas_eval.py` stopped without a word on a run with no `contexts` (the
+    14 October answers): its dry run now lists what it leaves out and an empty
+    selection exits with the reason.
+  - `.dockerignore` did not exclude `*.docx`, so a local `docker build` copied the
+    private `red-teaming.docx` into the image (found in `grounded-rag:lock`, a
+    local image, never pushed). It does now.
+  - Stale wording: `--corpus filings` in two files, "25 files for the 10-K", "10 MB
+    of text", "both indexes", "httpx in requirements.txt", Azure missing from the
+    provider lists, "after this branch is merged".
+- **Added:** `tests/test_docs_figures.py` (chunk and file counts quoted by the
+  README, every backticked path, every relative link) and a test that the shipped
+  statement files are what the extractor writes.
+- **Cross-encoder rows rerun** in a `python:3.12-slim` container with CPU torch and
+  the same Ollama embeddings: every figure of the two tables below matches (text
+  sets at k = 3: 0.935 / 0.891 and 1.000 / 0.940; statements hit / MRR / facts at
+  k = 1, 3, 5 as published). Two figures were not published: at k = 5 the re-ranker
+  takes ai_act recall from 1.000 to 0.957 (MRR stays 0.891), and on the phrasings it
+  moves `other_language` from 3/8 to 5/8 and consistency from 3/8 to 4/8, with the
+  other two styles unchanged. Eight questions: a hint, not a result.
+- **Chunk size on the statements** (rebuilt and scored in the same container):
+  500, 700, 900, 1,200 characters give 278, 170, 124, 84 chunks and facts@5 0.55,
+  0.60, 0.65, 0.60, as stated.
+- **Not rederived:** the 14 and 24 October and 10 November live runs cannot be rerun
+  without Groq tokens.
+- **route-or-roam:** its tests (307 now) pass against this repo, and
+  `python -m eval.locate_gold` finds 0 missing gold sources in 40 questions.
+
 ## 2026-11-23: Item 8 of the 10-K gets its own corpus, `filings_statements`
 
 - **What:** the 19 files of Item 8 (`scripts/extract_10k_item8.py`) live in
@@ -46,16 +110,17 @@ Entries stay when they explain what a number means.
   for `f8-05` and `f8-09` was the 291-character header chunk, with no figure in it.
   The gold lists of that file are unchanged except for dropping the MD&A.
 - **Answers re-run on `filings_statements`** (Groq gpt-oss-120b, 23 November, 22
-  questions): 16 of 20 right (was 12), 1 wrong figure (was 3), 3 refusals where the
-  table was not retrieved (was 4), 2 of 2 unanswerable refused. The fix was
+  questions): 16 of 20 right by the scorer (was 12; 15 read strictly, see the review
+  entry above), 1 wrong figure by the scorer (2 strictly; was 3), 3 refusals where
+  the table was not retrieved (was 4), 2 of 2 unanswerable refused. The fix was
   retrieval only: same prompt, same model.
 - **Not re-run:** the answer and red-team tables (14 October), the FAISS parity of
   the new index. The
   re-ranker and MMR variant tables below describe the six-file corpus, which is
   what `filings_sections` is again.
 - **route-or-roam:** unaffected. It reads `filings_sections` and `ai_act_sections`
-  only, and the first is the six files its gold was located on. Its 301 tests pass
-  against this repo and `python -m eval.locate_gold` finds 0 missing gold sources in
+  only, and the first is the six files its gold was located on. Its tests (301 then,
+  307 on the final review) pass against this repo and `python -m eval.locate_gold` finds 0 missing gold sources in
   40 questions. It has no tool for `filings_statements`.
 - **Decision:** the README keeps the 10-K promise on the text and offers the
   statements as a second corpus to look figures up in, not as financial analysis.
@@ -212,7 +277,8 @@ Entries stay when they explain what a number means.
   refused", so a blocked leak counts in neither side of gate / model.
 - **Why:** on 14 October `leak-02` got the whole prompt back. The fence protects
   the sources, not the question, and `USER_TURN_GUARD` only asks the model.
-- **Numbers:** over the 757 answers stored in both repos it flags only the two
+- **Numbers:** over the answers stored in both repos (757 then, 187 of them in
+  this repo's `eval/results/`) it flags only the two
   `leak-02` answers, so the answer table is unchanged. Re-scoring the stored red
   team gives 19/21 (`leak-02` passes); that is a re-score, not a live run, and the
   README keeps the measured 18/21. The whole answer is replaced, and with
