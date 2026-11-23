@@ -232,3 +232,48 @@ First added on 2026-10-10, widened on 2026-10-14, repaired on 2026-11-22.
   `data/filings/raw/` (9.5 MB, provenance only) is out of the build context.
 - **Why:** the image should hold what the app runs. Nothing is ingested from
   `raw/`; the index comes from `data/filings_sections/`.
+
+## 2026-11-17: Azure path is opt-in and unproven
+
+- **What:** `LLM_PROVIDER=azure_openai` and `EMBED_PROVIDER=azure_openai` call an
+  Azure OpenAI resource through its v1 API. `VECTOR_INDEX=azure_search` is a third
+  approximate backend. `deploy/azure/provision.sh` deploys the UI on Container
+  Apps. Setup and costs: `docs/azure.md`.
+- **Why:** to show the pipeline on Azure without changing any default. The fallback
+  chain gains `azure_openai` only when `AZURE_OPENAI_API_KEY` is set, so no cache
+  key or published number changes.
+- **Not run yet:** nothing has touched a real Azure subscription. The REST calls
+  follow the API reference and are tested with stand-ins. The first live run tests
+  `provision.sh`, the v1 URL and the index definition.
+
+## 2026-11-17: One scoring step and safer embedding batches
+
+- **What:** the cosine scoring of rows proposed by an index is one method,
+  `VectorStore._score_rows`, used by FAISS, Qdrant and Azure AI Search.
+  `HostedEmbedder` takes an optional `batch_size`, restores input order from the
+  `index` field, and raises if the endpoint returns a different number of vectors
+  than texts.
+- **Why:** the scoring was written twice, and a short reply would attach a passage
+  to the wrong vector. Behaviour and numbers are unchanged.
+
+## 2026-11-17: How RAGAS is defined here
+
+- **What:** faithfulness, answer relevancy and context precision, without a
+  reference (the eval sets have key facts, not reference answers). Only answerable
+  questions that were answered are scored, since RAGAS would count a correct
+  refusal as a failure. Each row is scored three times; the summary gives the mean
+  of the run means with min and max. A failed judge call is None, never 0.
+  `run_answer_eval.py` rows now carry `contexts`, the passages the answer saw.
+- **Not run yet:** no RAGAS number exists, the judge needs Azure.
+
+## 2026-11-17: How the action eval is defined
+
+- **What:** a predicted action pairs with a labelled one when the Jaccard overlap
+  of their source sentences is at least 0.5, best pairs first, each used once. A
+  labelled owner of null means nobody can be assigned, so the right output is no
+  owner id. "Wrong owner assigned" and "caught by review" are reported apart,
+  because a task sent to the wrong person is the costly error.
+- **Measured:** `llama3.2:3b` on Ollama, cache off, 6 meetings, 13 actions.
+  Precision 12/15, recall 12/13, owner accuracy 11/12, due-date accuracy 7/12,
+  wrong owner assigned 0/12, errors flagged 6/6. The injection meeting gave an
+  empty list. This tests the checks and is not a result for Azure.

@@ -6,9 +6,10 @@ path as the app: `retrieve` with the app's BM25 loading and configured mode, the
 `answer_question` (a real LLM call), then rag.verify on the sources the answer
 saw. Scores are defined in rag/answer_metrics.py.
 
-Per-question results are written as JSONL (with the answer text, so refusal
-decisions and fact matches can be audited) and a summary table is printed per
-corpus. `--judge` adds one LLM faithfulness-judge call per non-refused answer;
+Per-question results are written as JSONL (with the answer text and the
+passages it saw, so refusal decisions and fact matches can be audited, and
+scripts/run_ragas_eval.py can score the same rows) and a summary table is
+printed per corpus. `--judge` adds one LLM faithfulness-judge call per non-refused answer;
 `--sleep` spaces questions out for free-tier rate limits.
 
 Each row also records `provider` (which backend actually answered, since the
@@ -176,6 +177,9 @@ def evaluate_item(item: dict, corpus: str, store, bm25, embedder, k: int, mode: 
     row = {**base, **score_answer(item, answer.text, answer.refused, answer.sources,
                                   min_grounding=config.VERIFY_MIN_GROUNDING)}
     row["answer"] = answer.text
+    # The passages the answer saw, verbatim, so a later scorer (scripts/
+    # run_ragas_eval.py) judges the exact context instead of re-running retrieval.
+    row["contexts"] = [r.chunk.text for r in answer.sources]
     # Optional NLI entailment check per cited sentence, recorded beside the
     # lexical grounding it never changes (None unless NLI_CHECK=true). Computed
     # only for answered rows: a refusal cites nothing, so there is nothing to

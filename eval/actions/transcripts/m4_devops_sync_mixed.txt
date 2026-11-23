@@ -1,0 +1,7 @@
+Chair: Welcome, on commence par le dashboard DevOps.
+Lucas: The filters on the Epics view are broken since the last release.
+Lucas: OK, I'll take the action to fix the DevOps dashboard filters by next Monday.
+Sofie : Je vais demander à l'audit interne leur avis sur le nouveau contrôle, sans date pour l'instant.
+Chair: Goed. Thomas Leroy zal de testresultaten delen voor 1 mei.
+Marc: For the record, last week I already closed the action on vendor contracts.
+Chair: Merci, dank je, thanks.

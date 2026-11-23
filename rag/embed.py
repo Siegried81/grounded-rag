@@ -1,4 +1,4 @@
-"""Embedder implementations (fake, Ollama, hosted, in-process) and a config-driven factory.
+"""Embedder implementations (fake, Ollama, hosted, Azure OpenAI, in-process) and a config-driven factory.
 
 Each class satisfies the `Embedder` protocol from `rag.types`, so the rest of the
 pipeline never knows which backend is in use. `get_embedder` is the single place
@@ -78,12 +78,16 @@ class HostedEmbedder:
     """Embedder for an OpenAI-compatible hosted /embeddings endpoint.
 
     The whole batch goes in one request, which is cheaper than per-text calls.
+    `batch_size` splits it for a provider that caps one request (Azure OpenAI
+    limits both inputs and tokens per call); None keeps the single request.
     """
 
-    def __init__(self, base_url: str, model: str, api_key: str):
+    def __init__(self, base_url: str, model: str, api_key: str,
+                 batch_size: int | None = None):
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._api_key = api_key
+        self._batch_size = batch_size
 
     @property
     def model(self) -> str:
@@ -91,7 +95,20 @@ class HostedEmbedder:
         return self._model
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed all texts in one POST and return the vectors in input order."""
+        """Embed the texts (one POST per batch) and return the vectors in input order."""
+        size = self._batch_size or max(len(texts), 1)
+        vectors: list[list[float]] = []
+        for start in range(0, len(texts), size):
+            vectors.extend(self._post(texts[start:start + size]))
+        return vectors
+
+    def _post(self, texts: list[str]) -> list[list[float]]:
+        """One /embeddings request, its vectors put back in input order.
+
+        The API tags each vector with the position of its input; sorting on it
+        guards against a server that does not answer in order, since a swapped
+        vector would silently attach a passage to another passage's meaning.
+        """
         resp = requests.post(
             f"{self._base_url}/embeddings",
             headers={"Authorization": f"Bearer {self._api_key}"},
@@ -99,7 +116,12 @@ class HostedEmbedder:
             timeout=_TIMEOUT,
         )
         resp.raise_for_status()
-        return [d["embedding"] for d in resp.json()["data"]]
+        data = resp.json()["data"]
+        if len(data) != len(texts):
+            raise RuntimeError(f"embeddings endpoint returned {len(data)} vectors for "
+                               f"{len(texts)} texts")
+        data = sorted(data, key=lambda d: d.get("index", 0))
+        return [d["embedding"] for d in data]
 
 
 class SentenceTransformerEmbedder:
@@ -172,5 +194,22 @@ def get_embedder(provider: str | None = None) -> Embedder:
             config.HOSTED_EMBED_BASE_URL,
             config.HOSTED_EMBED_MODEL,
             config.HOSTED_EMBED_API_KEY,
+        )
+    if provider == "azure_openai":
+        # The v1 API of an Azure OpenAI resource is OpenAI-compatible, so it is
+        # the hosted embedder on the resource's URL, batched. The store records
+        # the deployment name as the model: a renamed deployment is a new
+        # embedding space as far as the index is concerned, which is the safe side.
+        if not (config.AZURE_OPENAI_ENDPOINT and config.AZURE_OPENAI_API_KEY
+                and config.AZURE_OPENAI_EMBED_DEPLOYMENT):
+            raise ValueError(
+                "EMBED_PROVIDER=azure_openai needs AZURE_OPENAI_ENDPOINT, "
+                "AZURE_OPENAI_API_KEY and AZURE_OPENAI_EMBED_DEPLOYMENT"
+            )
+        return HostedEmbedder(
+            config.azure_openai_v1_url(),
+            config.AZURE_OPENAI_EMBED_DEPLOYMENT,
+            config.AZURE_OPENAI_API_KEY,
+            batch_size=config.AZURE_OPENAI_EMBED_BATCH,
         )
     raise ValueError(f"Unknown embed provider: {provider!r}")

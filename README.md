@@ -47,8 +47,17 @@ More: [technical deep dive](docs/technical_deep_dive.md) ·
 - **Optional**, off by default: a cross-encoder re-ranker (`RERANKER=cross_encoder`,
   needs torch; it lifts MRR to 0.891 and 0.940 but is not used for any number
   below, see [decisions](docs/decisions.md)), an NLI entailment check
-  (`NLI_CHECK=true`), a user-turn guard (`USER_TURN_GUARD=true`), FAISS or Qdrant
-  as vector index.
+  (`NLI_CHECK=true`), a user-turn guard (`USER_TURN_GUARD=true`), FAISS, Qdrant or
+  Azure AI Search as vector index.
+- **Azure OpenAI and Azure AI Search**, opt-in ([`docs/azure.md`](docs/azure.md)):
+  Azure OpenAI for answers and embeddings, Azure AI Search as a dense backend
+  behind the same refusal gate, and a Container Apps deploy script. Not yet run
+  against a real Azure subscription, and no number below uses it.
+- **RAGAS scores** with an Azure judge (`scripts/run_ragas_eval.py`, see
+  [`docs/azure.md`](docs/azure.md)). Not yet run against a real subscription.
+- **Meeting action extraction** (`rag/actions.py`, `scripts/run_action_eval.py`,
+  see [`docs/azure.md`](docs/azure.md)): checked on 6 labelled meetings in French,
+  Dutch and English, with a local 3B model only.
 
 ## Pipeline
 
@@ -128,8 +137,8 @@ carried-over setting, not a calibrated one.
 
 | Role       | Default                              | Fallbacks                       | `.env`           |
 | ---------- | ------------------------------------ | ------------------------------- | ---------------- |
-| Generation | Groq `openai/gpt-oss-120b` (1 to 5 keys) | OpenRouter, Hugging Face (`HF_TOKEN` set), Ollama `llama3.2:3b` | `LLM_PROVIDER`   |
-| Embeddings | Ollama `nomic-embed-text` (local)    | `sentence_transformers` in-process, or any OpenAI-compatible endpoint | `EMBED_PROVIDER` |
+| Generation | Groq `openai/gpt-oss-120b` (1 to 5 keys) | OpenRouter, Hugging Face (`HF_TOKEN` set), Azure OpenAI (`AZURE_OPENAI_API_KEY` set), Ollama `llama3.2:3b` | `LLM_PROVIDER`   |
+| Embeddings | Ollama `nomic-embed-text` (local)    | `sentence_transformers` in-process, Azure OpenAI, or any OpenAI-compatible endpoint | `EMBED_PROVIDER` |
 
 With Ollama for both, everything runs offline and free. The optional local models
 (embedder `all-MiniLM-L6-v2`, re-ranker `ms-marco-MiniLM-L-6-v2`, NLI
@@ -145,7 +154,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -q
 ```
 
-515 passing and 1 skipped without `faiss-cpu` (516 passing with it), all offline
+609 passing and 1 skipped without `faiss-cpu` (610 passing with it), all offline
 (fake embedder, every HTTP call mocked). `ruff check` runs in CI too. The count
 printed at the end of the run is the current one.
 
@@ -310,7 +319,7 @@ retrieved, and the model still chose the wrong article.
 - **One live run per evaluation, one model** (gpt-oss-120b, free tier): no
   run-to-run variance, only the sampling interval.
 - **Brute-force NumPy search, one-shot generation**: fine at this scale, no
-  multi-hop. FAISS HNSW and Qdrant sit behind the same `search` for larger corpora,
+  multi-hop. FAISS HNSW, Qdrant and Azure AI Search sit behind the same `search` for larger corpora,
   off by default, and no published number uses them.
 
 Details and roadmap: [technical deep dive](docs/technical_deep_dive.md).

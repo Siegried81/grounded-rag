@@ -74,7 +74,9 @@ A corpus here is hundreds to a few thousand chunks; brute-force cosine is a few
 milliseconds and needs no server, deploys with the repo, and is trivially
 inspectable and testable. The `VectorStore` interface (`add`, `search`, `save`,
 `load`) is small enough to re-implement on another backend without touching the
-rest of the pipeline. Two exist, both off by default: `VECTOR_INDEX=faiss`
+rest of the pipeline. Three exist, all off by default: `VECTOR_INDEX=faiss`
 (`rag/ann.py`) lets an HNSW graph propose the candidates while the store keeps
-scoring them, and `VECTOR_INDEX=qdrant` (`rag/qdrant_index.py`) does the same
-with a Qdrant server.
+scoring them, `VECTOR_INDEX=qdrant` (`rag/qdrant_index.py`) does the same
+with a Qdrant server, and `VECTOR_INDEX=azure_search`
+(`rag/azure_search_index.py`) with an Azure AI Search index. All three go
+through one scoring step, `VectorStore._score_rows`.

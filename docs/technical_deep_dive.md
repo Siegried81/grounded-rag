@@ -86,6 +86,15 @@ contract, one collection per store named `<QDRANT_COLLECTION>_<index dir>`
 prefix) and `QDRANT_API_KEY`. Both packages are imported lazily and listed in
 `requirements-optional.txt`.
 
+**Azure AI Search** (`VECTOR_INDEX=azure_search`, `rag/azure_search_index.py`, off
+by default, not yet run against a real subscription). Same contract: document key
+`i` is row `i`, and the store scores what the index proposes through the same
+`VectorStore._score_rows` as FAISS and Qdrant. It talks REST through `requests`.
+The index is reused only when it holds `n` documents whose first and last carry the
+fingerprint of the store's vectors, otherwise it is rebuilt. After an upload it
+waits for the count to reach `n`. `efSearch` is clamped to Azure's 100 to 1000, and
+the name uses dashes. Setup and costs: [`docs/azure.md`](azure.md).
+
 **Keyword index** (`rag/lexical.py`). Persisted Okapi BM25 (`rank_bm25`) with the
 same lowercase, split-on-non-alphanumerics tokeniser for queries and documents.
 It catches exact terms (article numbers, acronyms) that embeddings blur. Chunks
@@ -542,6 +551,11 @@ The suite is offline: a deterministic fake embedder, every HTTP call mocked, and
 tests live in `tests/`, one file per module. The live evaluations are the
 complement: tests prove the code does what it says, evaluations measure how well it
 behaves with a real model.
+
+Azure additions (`test_azure_openai.py`, `test_azure_search_index.py`,
+`test_run_ragas_eval.py`, `test_actions.py`, `test_run_action_eval.py`) run on
+stand-ins for the REST services, scripted replies and fake RAGAS scorers. None of
+it has touched a real Azure resource.
 
 ## 13. Known limitations
 

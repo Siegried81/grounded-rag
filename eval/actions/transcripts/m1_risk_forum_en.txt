@@ -1,0 +1,10 @@
+Chair: Good morning, let's start with the incident register.
+Sofie: Three incidents are still open from February.
+Chair: Sofie will update the incident register before Friday.
+Sofie: Fine.
+Jan: On the audit, the report came in yesterday.
+Jan: I'll send the audit findings to the chair by 15 March.
+Chair: On the alert threshold, we decided to keep the current threshold.
+Marc: The access reviews are late again, there are forty of them.
+Chair: We need someone to check the access reviews backlog by the end of March, owner to be confirmed.
+Chair: Thanks all, see you next month.
