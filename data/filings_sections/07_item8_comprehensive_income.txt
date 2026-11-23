@@ -1,0 +1,20 @@
+Apple Inc. Form 10-K for the fiscal year ended September 27, 2025. Part II, Item 8. Financial Statements and Supplementary Data. Amounts are in millions of U.S. dollars unless a line says otherwise; table rows read `label: 2025 | 2024 | 2023` (fiscal years) unless the columns say otherwise.
+
+CONSOLIDATED STATEMENTS OF COMPREHENSIVE INCOME
+(In millions)
+Years ended
+September 27, 2025 | September 28, 2024 | September 30, 2023
+Net income: 112,010 | 93,736 | 96,995
+Other comprehensive income/(loss):
+Change in foreign currency translation, net of tax: (267) | 395 | (765)
+Change in unrealized gains/losses on derivative instruments, net of tax:
+Change in fair value of derivative instruments: 849 | (832) | 323
+Adjustment for net (gains)/losses realized and included in net income: (212) | (1,337) | (1,717)
+Total change in unrealized gains/losses on derivative instruments: 637 | (2,169) | (1,394)
+Change in unrealized gains/losses on marketable debt securities, net of tax:
+Change in fair value of marketable debt securities: 817 | 5,850 | 1,563
+Adjustment for net (gains)/losses realized and included in net income: 414 | 204 | 253
+Total change in unrealized gains/losses on marketable debt securities: 1,231 | 6,054 | 1,816
+Total other comprehensive income/(loss): 1,601 | 4,280 | (343)
+Total comprehensive income: 113,611 | 98,016 | 96,652
+See accompanying Notes to Consolidated Financial Statements.

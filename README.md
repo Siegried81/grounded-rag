@@ -179,7 +179,7 @@ below are kept in [`eval/results/`](eval/results/).
 ## Results
 
 Hybrid retrieval, generation with `openai/gpt-oss-120b` on Groq's free tier, on the
-corpora the repo ships (878 AI Act chunks, 155 10-K chunks). The answer and
+corpora the repo ships (878 AI Act chunks, 246 10-K chunks). The answer and
 red-team tables are the live run of 14 October 2026, scored with the code of that
 run; verifier changes since then move none of their figures
 ([decisions](docs/decisions.md), 2026-11-08 and 2026-11-22).
@@ -190,10 +190,10 @@ section(s) that answer it)
 | Corpus            | Documents | Questions | Recall@3 |   MRR | hit_rate@3 (95% CI) |
 | ----------------- | --------: | --------: | -------: | ----: | -------------------: |
 | ai_act_sections   |       308 |        23 |    0.957 | 0.754 | 1.000 (0.857-1.000) |
-| filings_sections  |         6 |        25 |    0.900 | 0.833 | 0.920 (0.750-0.978) |
+| filings_sections  |        25 |        25 |    0.900 | 0.800 | 0.920 (0.750-0.978) |
 
 At the `TOP_K = 5` the app runs, the same sets give recall@5 1.000 / MRR 0.754 and
-recall@5 1.000 / MRR 0.851; the table stays at k = 3 because it is the harder
+recall@5 0.980 / MRR 0.818; the table stays at k = 3 because it is the harder
 routing test. MMR takes its relevance from the fused rank since 10 November; before,
 MRR was 0.746 and 0.840 (one question each, so noise-sized). Over four documents
 the AI Act MRR had been 0.884: over 308 files it is a real routing test.

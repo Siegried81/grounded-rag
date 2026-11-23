@@ -1,0 +1,38 @@
+Apple Inc. Form 10-K for the fiscal year ended September 27, 2025. Part II, Item 8. Financial Statements and Supplementary Data. Amounts are in millions of U.S. dollars unless a line says otherwise; table rows read `label: 2025 | 2024 | 2023` (fiscal years) unless the columns say otherwise.
+
+Note 9 – Debt
+Commercial Paper
+The Company issues unsecured short-term promissory notes pursuant to a commercial paper program. The Company uses net proceeds from the commercial paper program for general corporate purposes, including dividends and share repurchases. As of September 27, 2025 and September 28, 2024, the Company had $8.0 billion and $10.0 billion of commercial paper outstanding, respectively, with maturities generally less than nine months. The weighted-average interest rate of the Company’s commercial paper was 4.19% and 5.00% as of September 27, 2025 and September 28, 2024, respectively. The following table provides a summary of cash flows associated with commercial paper for 2025, 2024 and 2023 (in millions):
+2025 | 2024 | 2023
+Maturities 90 days or less:
+Proceeds from/(Repayments of) commercial paper, net: (5,820) | 3,960 | (1,333)
+Maturities greater than 90 days:
+Proceeds from commercial paper: 5,836 | — | —
+Repayments of commercial paper: (2,048) | — | (2,645)
+Proceeds from/(Repayments of) commercial paper, net: 3,788 | — | (2,645)
+Total proceeds from/(repayments of) commercial paper, net: (2,032) | 3,960 | (3,978)
+Term Debt
+The Company has outstanding Notes, which are senior unsecured obligations with interest payable in arrears. The following table provides a summary of the Company’s term debt as of September 27, 2025 and September 28, 2024:
+Maturities(calendar year) | 2025 | 2024
+Amount(in millions) | Effective Interest Rate | Amount(in millions) | Effective Interest Rate
+2013 – 2023 debt issuances:
+Fixed-rate 0.000% – 4.850% notes: 2025 – 2062 | 86,781 | 0.03% – 5.75% | 97,341 | 0.03% – 6.65%
+2025 debt issuance:
+Fixed-rate 4.000% – 4.750% notes: 2028 – 2035 | 4,500 | 4.07% – 4.83% | —
+Total term debt principal: 91,281 | 97,341
+Unamortized premium/(discount) and issuance costs, net: (309) | (321)
+Hedge accounting fair value adjustments: (294) | (358)
+Total term debt: 90,678 | 96,662
+Less: Current portion of term debt: (12,350) | (10,912)
+Total non-current portion of term debt: 78,328 | 85,750
+To manage interest rate risk on certain of its U.S. dollar–denominated fixed-rate notes, the Company uses interest rate swaps to effectively convert the fixed interest rates to floating interest rates on a portion of these notes. Additionally, to manage foreign exchange rate risk on certain of its foreign currency–denominated notes, the Company uses cross-currency swaps to effectively convert these notes to U.S. dollar–denominated notes.
+The effective interest rates for the Notes include the interest on the Notes, amortization of the discount or premium and, if applicable, adjustments related to hedging.
+The future principal payments for the Company’s Notes as of September 27, 2025, are as follows (in millions):
+2026: 12,393
+2027: 10,078
+2028: 9,300
+2029: 5,235
+2030: 4,972
+Thereafter: 49,303
+Total term debt principal: 91,281
+As of September 27, 2025 and September 28, 2024, the fair value of the Company’s Notes, based on Level 2 inputs, was $80.4 billion and $88.4 billion, respectively.

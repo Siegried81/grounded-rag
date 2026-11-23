@@ -24,8 +24,12 @@ Where to get a filing (all public, free):
   it).
 - `../filings_sections/`: the primary 10-K document extracted from that raw file,
   stripped of markup and split verbatim into six Item sections (Business, Risk
-  Factors, Cybersecurity, Legal Proceedings, MD&A, Market Risk). This is the
-  ready-to-query corpus:
+  Factors, Cybersecurity, Legal Proceedings, MD&A, Market Risk), plus Item 8
+  (Financial Statements and Supplementary Data) in 19 files: the five statements,
+  the 13 notes and the auditor's reports. Item 8 comes from
+  `scripts/extract_10k_item8.py`, which flattens each table to
+  `label: 2025 | 2024 | 2023` lines (millions of dollars) and writes
+  `07_item8_*.txt`; rerun it to regenerate them. This is the ready-to-query corpus:
 
   ```bash
   python cli.py ingest --corpus filings_sections

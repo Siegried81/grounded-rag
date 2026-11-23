@@ -1,0 +1,27 @@
+Apple Inc. Form 10-K for the fiscal year ended September 27, 2025. Part II, Item 8. Financial Statements and Supplementary Data. Amounts are in millions of U.S. dollars unless a line says otherwise; table rows read `label: 2025 | 2024 | 2023` (fiscal years) unless the columns say otherwise.
+
+CONSOLIDATED STATEMENTS OF SHAREHOLDERS’ EQUITY
+(In millions, except per-share amounts)
+Years ended
+September 27, 2025 | September 28, 2024 | September 30, 2023
+Total shareholders’ equity, beginning balances: 56,950 | 62,146 | 50,672
+Common stock and additional paid-in capital:
+Beginning balances: 83,276 | 73,812 | 64,849
+Common stock issued: 1,498 | 1,423 | 1,346
+Common stock withheld related to net share settlement of equity awards: (4,452) | (3,993) | (3,521)
+Share-based compensation: 13,246 | 12,034 | 11,138
+Ending balances: 93,568 | 83,276 | 73,812
+Accumulated deficit:
+Beginning balances: (19,154) | (214) | (3,068)
+Net income: 112,010 | 93,736 | 96,995
+Dividends and dividend equivalents declared: (15,413) | (15,218) | (14,996)
+Common stock withheld related to net share settlement of equity awards: (1,655) | (1,612) | (2,099)
+Common stock repurchased: (90,052) | (95,846) | (77,046)
+Ending balances: (14,264) | (19,154) | (214)
+Accumulated other comprehensive loss:
+Beginning balances: (7,172) | (11,452) | (11,109)
+Other comprehensive income/(loss): 1,601 | 4,280 | (343)
+Ending balances: (5,571) | (7,172) | (11,452)
+Total shareholders’ equity, ending balances: 73,733 | 56,950 | 62,146
+Dividends and dividend equivalents declared per share or RSU: 1.02 | 0.98 | 0.94
+See accompanying Notes to Consolidated Financial Statements.

@@ -1,0 +1,72 @@
+Apple Inc. Form 10-K for the fiscal year ended September 27, 2025. Part II, Item 8. Financial Statements and Supplementary Data. Amounts are in millions of U.S. dollars unless a line says otherwise; table rows read `label: 2025 | 2024 | 2023` (fiscal years) unless the columns say otherwise.
+
+Note 4 – Financial Instruments
+Cash, Cash Equivalents and Marketable Securities
+The following tables show the Company’s cash, cash equivalents and marketable securities by significant investment category as of September 27, 2025 and September 28, 2024 (in millions):
+2025
+Adjusted Cost | Unrealized Gains | Unrealized Losses | Fair Value | Cash and Cash Equivalents | Current Marketable Securities | Non-Current Marketable Securities
+Cash: 28,267 | — | — | 28,267 | 28,267 | — | —
+Level 1:
+Money market funds: 5,272 | — | — | 5,272 | 5,272 | — | —
+Mutual funds: 679 | 177 | (2) | 854 | — | 854 | —
+Subtotal: 5,951 | 177 | (2) | 6,126 | 5,272 | 854 | —
+Level 2 (1):
+U.S. Treasury securities: 16,074 | 56 | (282) | 15,848 | 1,190 | 3,712 | 10,946
+U.S. agency securities: 5,269 | — | (149) | 5,120 | 251 | 2,456 | 2,413
+Non-U.S. government securities: 6,586 | 111 | (424) | 6,273 | — | 855 | 5,418
+Certificates of deposit and time deposits: 917 | — | — | 917 | 904 | — | 13
+Commercial paper: 100 | — | — | 100 | 50 | 50 | —
+Corporate debt securities: 47,210 | 266 | (916) | 46,560 | — | 10,623 | 35,937
+Municipal securities: 207 | — | (2) | 205 | — | 119 | 86
+Mortgage- and asset-backed securities: 24,130 | 126 | (1,252) | 23,004 | — | 94 | 22,910
+Subtotal: 100,493 | 559 | (3,025) | 98,027 | 2,395 | 17,909 | 77,723
+Total: 134,711 | 736 | (3,027) | 132,420 | 35,934 | 18,763 | 77,723
+2024
+Adjusted Cost | Unrealized Gains | Unrealized Losses | Fair Value | Cash and Cash Equivalents | Current Marketable Securities | Non-Current Marketable Securities
+Cash: 27,199 | — | — | 27,199 | 27,199 | — | —
+Level 1:
+Money market funds: 778 | — | — | 778 | 778 | — | —
+Mutual funds: 515 | 105 | (3) | 617 | — | 617 | —
+Subtotal: 1,293 | 105 | (3) | 1,395 | 778 | 617 | —
+Level 2 (1):
+U.S. Treasury securities: 16,150 | 45 | (516) | 15,679 | 212 | 4,087 | 11,380
+U.S. agency securities: 5,431 | — | (272) | 5,159 | 155 | 703 | 4,301
+Non-U.S. government securities: 17,959 | 93 | (484) | 17,568 | 1,158 | 10,810 | 5,600
+Certificates of deposit and time deposits: 873 | — | — | 873 | 387 | 478 | 8
+Commercial paper: 1,066 | — | — | 1,066 | 28 | 1,038 | —
+Corporate debt securities: 65,622 | 270 | (1,953) | 63,939 | 26 | 16,027 | 47,886
+Municipal securities: 412 | — | (7) | 405 | — | 190 | 215
+Mortgage- and asset-backed securities: 24,595 | 175 | (1,403) | 23,367 | — | 1,278 | 22,089
+Subtotal: 132,108 | 583 | (4,635) | 128,056 | 1,966 | 34,611 | 91,479
+Total (2)(3): 160,600 | 688 | (4,638) | 156,650 | 29,943 | 35,228 | 91,479
+(1)The valuation techniques used to measure the fair values of the Company’s Level 2 financial instruments, which generally have counterparties with high credit ratings, are based on quoted market prices or model-driven valuations using significant inputs derived from or corroborated by observable market data.
+(2)As of September 28, 2024, cash and cash equivalents included $2.6 billion held in escrow and restricted from general use. These restricted cash and cash equivalents were designated to settle the Company’s obligation related to the State Aid Decision (refer to Note 7, “Income Taxes”).
+(3)As of September 28, 2024, current marketable securities included $13.2 billion held in escrow and restricted from general use. These restricted marketable securities were designated to settle the Company’s obligation related to the State Aid Decision (refer to Note 7, “Income Taxes”).
+As of September 27, 2025, 80% of the Company’s non-current marketable debt securities other than mortgage- and asset-backed securities had maturities between 1 and 5 years, 15% between 5 and 10 years, and 5% greater than 10 years. As of September 27, 2025, 13% of the Company’s non-current mortgage- and asset-backed securities had maturities between 1 and 5 years, 14% between 5 and 10 years, and 73% greater than 10 years.
+The Company’s investments in marketable debt securities have been classified and accounted for as available-for-sale. The Company classifies marketable debt securities as either current or non-current based on each instrument’s underlying maturity.
+Derivative Instruments and Hedging
+The Company may use derivative instruments to partially offset its business exposure to foreign exchange and interest rate risk. However, the Company may choose not to hedge certain exposures for a variety of reasons including accounting considerations or the prohibitive economic cost of hedging particular exposures. There can be no assurance the hedges will offset more than a portion of the financial impact resulting from movements in foreign exchange or interest rates.
+All derivative instruments are recorded in the Consolidated Balance Sheets at fair value. The accounting treatment for derivative gains and losses is based on intended use and hedge designation.
+Gains and losses arising from amounts that are included in the assessment of cash flow hedge effectiveness are initially deferred in accumulated other comprehensive income/(loss) and subsequently reclassified into earnings when the hedged transaction affects earnings, and in the same line item in the Consolidated Statements of Operations. Gains and losses arising from amounts that are included in the assessment of fair value hedge effectiveness are recognized in the Consolidated Statements of Operations line item to which the hedge relates along with offsetting losses and gains related to the change in value of the hedged item.
+For derivative instruments designated as cash flow and fair value hedges, amounts excluded from the assessment of hedge effectiveness are recognized on a straight-line basis over the life of the hedge in the Consolidated Statements of Operations line item to which the hedge relates. Changes in the fair value of amounts excluded from the assessment of hedge effectiveness are recognized in other comprehensive income/(loss).
+Gains and losses arising from changes in the fair values of derivative instruments that are not designated as accounting hedges are recognized in the Consolidated Statements of Operations.
+The Company classifies cash flows related to derivative instruments in the same section of the Consolidated Statements of Cash Flows as the items being hedged, which are generally classified as operating activities.
+Foreign Exchange Rate Risk
+To protect gross margins from fluctuations in foreign exchange rates, the Company may use forwards, options or other instruments, and may designate these instruments as cash flow hedges. The Company generally hedges portions of its forecasted foreign currency exposure associated with revenue and inventory purchases, typically for up to 12 months.
+To protect the Company’s foreign currency–denominated term debt or marketable securities from fluctuations in foreign exchange rates, the Company may use forwards, cross-currency swaps or other instruments. The Company designates these instruments as either cash flow or fair value hedges. As of September 27, 2025, the maximum length of time over which the Company is hedging its exposure to the variability in future cash flows for term debt–related foreign currency transactions is 17 years.
+The Company may also use derivative instruments that are not designated as accounting hedges to protect gross margins from certain fluctuations in foreign exchange rates, as well as to offset a portion of the foreign currency gains and losses generated by the remeasurement of certain assets and liabilities denominated in non-functional currencies.
+Interest Rate Risk
+To protect the Company’s term debt or marketable securities from fluctuations in interest rates, the Company may use interest rate swaps, options or other instruments. The Company designates these instruments as either cash flow or fair value hedges.
+The notional amounts of the Company’s outstanding derivative instruments as of September 27, 2025 and September 28, 2024, were as follows (in millions):
+2025 | 2024
+Derivative instruments designated as accounting hedges:
+Foreign exchange contracts: 62,647 | 64,069
+Interest rate contracts: 12,875 | 14,575
+Derivative instruments not designated as accounting hedges:
+Foreign exchange contracts: 109,079 | 91,493
+As of September 27, 2025 and September 28, 2024, the carrying amount of the Company’s current and non-current term debt subject to fair value hedges was $12.6 billion and $13.5 billion, respectively.
+Accounts Receivable
+Trade Receivables
+As of September 27, 2025, the Company had one customer that represented 10% or more of total trade receivables, which accounted for 12%. The Company’s third-party cellular network carriers accounted for 34% and 38% of total trade receivables as of September 27, 2025 and September 28, 2024, respectively. The Company requires third-party credit support or collateral from certain customers to limit credit risk.
+Vendor Non-Trade Receivables
+The Company has non-trade receivables from certain of its manufacturing vendors resulting from the sale of components to these vendors who manufacture subassemblies or assemble final products for the Company. The Company purchases these components directly from suppliers. The Company does not reflect the sale of these components in products net sales. Rather, the Company recognizes any gain on these sales as a reduction of products cost of sales when the related final products are sold by the Company. As of September 27, 2025, the Company had two vendors that individually represented 10% or more of total vendor non-trade receivables, which accounted for 46% and 23%. As of September 28, 2024, the Company had two vendors that individually represented 10% or more of total vendor non-trade receivables, which accounted for 44% and 23%.

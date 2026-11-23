@@ -12,7 +12,7 @@ Defaults target the `*_sections` corpora (many documents per corpus), whose eval
 file is `eval/<corpus>_eval.jsonl`. Source-level metrics only discriminate when
 a corpus has several documents: a one-file corpus gives a hit rate of 1.0 by
 construction and says nothing about ranking, which is why both shipped corpora
-are split (308 files for the regulation, 6 Item sections for the 10-K) and why
+are split (308 files for the regulation, 25 files for the 10-K) and why
 the single-file `ai_act` corpus was retired. hit_rate@k is a
 0/1 outcome per question, so it is printed with a 95% Wilson interval
 (rag/stats.py); recall@k and MRR are not binomial and get none.
@@ -84,12 +84,14 @@ def main() -> None:
     store, bm25 = load_corpus(args.corpus)
     embedder = get_embedder()
     eval_file = Path(args.eval_file) if args.eval_file else default_eval_file(args.corpus)
-    items = load_eval(eval_file)
+    # An answers file (eval/*_answers_eval.jsonl) works too: its gold_sources are
+    # the relevant sources, and its unanswerable questions have none to retrieve.
+    items = [it for it in load_eval(eval_file) if it.get("answerable", True)]
 
     print(f"{'question':<60} {'hit@k':>6} {'rec@k':>6} {'rr':>6}")
     hits, recalls, rrs = [], [], []
     for item in items:
-        relevant = set(item["relevant_sources"])
+        relevant = set(item.get("relevant_sources") or item["gold_sources"])
         results = retrieve(
             item["question"], store, embedder, top_k=args.k, bm25=bm25, mode=args.mode
         )

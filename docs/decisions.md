@@ -4,6 +4,25 @@ One entry per decision that still holds: date, what, why, in a few lines. When a
 later change replaces an earlier one, the entry is merged under the latest date.
 Entries stay when they explain what a number means.
 
+## 2026-11-23: Item 8 of the 10-K joins the filings corpus
+
+- **What:** `filings_sections` goes from 6 files (155 chunks) to 25 (246 chunks):
+  the 19 files of Item 8 from `scripts/extract_10k_item8.py`. New set
+  `eval/filings_item8_answers_eval.jsonl` (22 questions on the statements).
+  `fs-15` asked for net income in fiscal 2025, which the corpus now answers, so
+  it asks for fiscal 2022 and stays unanswerable.
+- **Why:** the numbers of the report were out of reach: the corpus held the text
+  of six Items and no statement.
+- **Numbers that moved** (retrieval, no LLM, same 25 questions, labels untouched):
+  filings k = 3 MRR 0.833 to 0.800 (recall 0.900 and hit 0.920 unchanged); k = 5
+  recall 1.000 to 0.980 and MRR 0.851 to 0.818. The cause is the new files taking
+  rank 1 to 3 on a few questions ("reportable segments", "fiscal year end",
+  "employees"). AI Act, phrasing (hit@5 8/8, 7/8, 3/8) and consistency 3/8 are
+  unchanged. FAISS parity on filings: 155 of 155 became 245 of 246.
+- **Not re-run:** the answer and red-team tables (14 October, 6-file corpus) and the
+  re-ranker and MMR variant tables below, which describe the old corpus. The Item 8
+  questions score 0.750 hit@5 on retrieval; their answers are not scored yet.
+
 ## 2026-11-23: Locked dependencies for the image and CI
 
 - **What:** `requirements.lock` (uv, Python 3.12, Linux) is what the Dockerfile

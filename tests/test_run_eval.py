@@ -116,3 +116,14 @@ def test_eval_names_the_reranker_only_when_it_is_on(run_eval, monkeypatch, capsy
     monkeypatch.setattr(run_eval.config, "RERANK_MODEL", "some/cross-encoder")
     _main(run_eval, monkeypatch)
     assert "reranker=some/cross-encoder" in capsys.readouterr().out
+
+
+def test_answers_file_is_accepted_and_unanswerable_rows_are_skipped(run_eval, monkeypatch, capsys):
+    rows = [
+        {"id": "a", "question": "q1?", "answerable": True, "gold_sources": ["a.txt"]},
+        {"id": "b", "question": "q2?", "answerable": False, "gold_sources": []},
+    ]
+    run_eval.eval_file.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    _main(run_eval, monkeypatch)
+    out = capsys.readouterr().out
+    assert "questions=1 " in out and "recall@3=1.000" in out

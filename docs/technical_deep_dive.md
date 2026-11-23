@@ -76,9 +76,8 @@ thousands of chunks this is milliseconds, with two inspectable files.
 (`M = 32`, `FAISS_EF_SEARCH = 64`) only proposes rows; the store scores them with
 its own cosine, so `SCORE_THRESHOLD` keeps its meaning and only recall can change.
 Measured on the shipped indexes (stored vectors as queries, k = 20): top-20
-identical to brute force for 876 of 878 AI Act chunks and 155 of 155 filings
-chunks, score differences at most 3.6e-7. Two misses in 878 is why it stays off
-at this scale.
+identical to brute force for 876 of 878 AI Act chunks and 245 of 246 filings
+chunks. Three misses in 1,124 is why it stays off at this scale.
 
 **Qdrant** (`VECTOR_INDEX=qdrant`, `rag/qdrant_index.py`, off by default). Same
 contract, one collection per store named `<QDRANT_COLLECTION>_<index dir>`
@@ -270,7 +269,7 @@ All four run the app's code path (BM25 loading, configured mode, gate,
 and §8.3 tables are the live run of 14 October 2026 (LLM cache off), scored with
 the code of that run; later verifier changes move none of their figures
 (`docs/decisions.md`). Corpus: the full English Regulation (EU) 2024/1689 in 308
-files, 878 chunks, plus the six 10-K Item sections (155 chunks). Rows:
+files, 878 chunks, plus the 10-K in 25 files (the six narrative Items and Item 8, 246 chunks). Rows:
 [`eval/results/`](../eval/results/).
 
 ### 8.1 Retrieval (`rag/metrics.py`)
@@ -285,14 +284,26 @@ section(s), the operative article plus the recital that squarely covers it.
 | Corpus (hybrid, k=3) | Documents | Chunks | Questions | recall@3 | MRR | hit_rate@3 (95% CI) |
 |---|---:|---:|---:|---:|---:|---:|
 | `ai_act_sections` | 308 | 878 | 23 | 0.957 | 0.754 | 1.000 (0.857-1.000) |
-| `filings_sections` | 6 | 155 | 25 | 0.900 | 0.833 | 0.920 (0.750-0.978) |
+| `filings_sections` | 25 | 246 | 25 | 0.900 | 0.800 | 0.920 (0.750-0.978) |
 
-At `TOP_K = 5` (what the app runs): recall@5 1.000 / MRR 0.754 and recall@5 1.000
-/ MRR 0.851. The table stays at k = 3, the harder routing test. These use MMR
+At `TOP_K = 5` (what the app runs): recall@5 1.000 / MRR 0.754 and recall@5 0.980
+/ MRR 0.818. The table stays at k = 3, the harder routing test. These use MMR
 relevance from the fused rank; with the old min-max relevance MRR was 0.746 and
 0.840 (`docs/decisions.md`, 2026-11-10). Over four documents the AI Act MRR had
 been 0.884; over 308 files it is a real routing test. One question moves recall by
 about 0.04: read such differences as noise.
+
+**Item 8 (the financial statements).** `eval/filings_item8_answers_eval.jsonl` has
+22 questions on the statements, 20 answerable (16 read one figure, 4 need a
+subtraction, a ratio or a growth rate). Its gold is every section where the exact
+figure is printed, so the MD&A counts when it repeats the number. Retrieval only
+(`scripts/run_eval.py --corpus filings_sections --eval-file
+eval/filings_item8_answers_eval.jsonl`): hit_rate@1 0.350, @3 0.700 (95% CI
+0.481-0.855), @5 0.750 (0.531-0.888), MRR 0.508 at k = 3, against 0.920 and 0.833
+on the narrative questions. A balance-sheet line ("total assets") has no
+distinctive words, so hybrid search ranks the MD&A and the notes above the
+statement. Dense alone is worse (hit@5 0.450). Whether the answers are right is
+not measured here.
 
 ### 8.2 Answers (`scripts/run_answer_eval.py`, `rag/answer_metrics.py`)
 
