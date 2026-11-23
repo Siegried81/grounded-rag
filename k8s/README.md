@@ -4,8 +4,8 @@ A learning port of `docker-compose.yml` to Kubernetes. The Streamlit app (8501),
 the FastAPI API (8002), the one-shot index builder as a Job, and an Ollama
 Deployment (11434).
 
-Is k8s needed here? No. One RAG app belongs on Compose or a PaaS. I did this
-port to practise the objects: Deployment, Service, Job, PVC, Secret.
+Is k8s needed here? No. One RAG app belongs on Compose or a PaaS. This port is
+there to practise the objects: Deployment, Service, Job, PVC, Secret.
 
 ## What maps to what
 
@@ -42,9 +42,9 @@ kind load docker-image siegried/grounded-rag:latest --name rag
 kubectl create secret generic rag-secrets --from-env-file=../.env
 
 # apply everything at once; the Job builds the index onto the shared rag-index
-# volume. The app and api come up alongside it -- their health probes don't
-# check the index -- so wait for the Job before sending traffic (queries error
-# until the index exists)
+# volume. The app and api come up alongside it (their health probes don't
+# check the index), so wait for the Job before sending traffic: queries error
+# until the index exists.
 kubectl apply -f grounded-rag.yaml
 kubectl exec deploy/rag-ollama -- ollama pull nomic-embed-text   # the default embedder; skip if EMBED_PROVIDER is hosted
 kubectl wait --for=condition=complete job/rag-ingest --timeout=600s

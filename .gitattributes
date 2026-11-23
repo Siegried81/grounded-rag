@@ -1,0 +1,3 @@
+# Text files are stored and checked out with LF on every platform, so a Windows
+# checkout shows no whole-file line-ending diffs. Git detects binaries itself.
+* text=auto eol=lf

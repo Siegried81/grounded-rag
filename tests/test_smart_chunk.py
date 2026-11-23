@@ -1,5 +1,7 @@
 """Offline tests for sentence-aware chunking."""
 
+from itertools import pairwise
+
 from rag.smart_chunk import chunk_pages, smart_chunk_text, split_sentences
 
 TEXT = ("Alpha is first. Bravo is second! Charlie is third? Delta is fourth. "
@@ -36,7 +38,7 @@ def test_oversized_sentence_is_own_chunk():
 def test_overlap_carries_trailing_sentence():
     chunks = smart_chunk_text(TEXT, "a", "c", size=40, overlap=20)
     assert len(chunks) > 1
-    for prev, nxt in zip(chunks, chunks[1:]):
+    for prev, nxt in pairwise(chunks):
         last = split_sentences(prev.text)[-1]
         assert nxt.text.startswith(last)
 

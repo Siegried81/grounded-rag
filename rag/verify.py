@@ -18,6 +18,7 @@ import re
 from dataclasses import dataclass, field
 from decimal import Decimal
 
+import config
 from rag.answer import REFUSAL_MESSAGE_SET, normalize_citations
 from rag.types import Retrieved
 
@@ -55,15 +56,19 @@ _MIN_CLAIM_WORDS = 4  # a sentence needs MORE than this many content words to co
 # "24". Years and article numbers are figures too, which is the point: a wrong
 # article is a wrong claim.
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)?")
-_THOUSANDS_RE = re.compile(r"(?<=\d)[ ,.  ](?=\d{3}\b)")
+# A thousands group needs a lead of one to three digits that does not start with
+# 0 and does not continue a longer number: "2024 100" is a year then a count, and
+# "0.350" is a decimal, so neither is merged into one figure.
+_THOUSANDS_RE = re.compile(r"(?<![\d.,])([1-9]\d{0,2})((?:[ ,.\u00a0\u202f]\d{3})+)\b")
 # Negation markers of the three answer languages. A cited sentence that negates
 # while none of its sources negates anything is read as a contradiction
 # candidate: "does not cover" against "covers". A heuristic, so it is reported
 # and gates strict_ok only.
 _NEGATION_RE = re.compile(
-    r"\b(?:not|never|no|none|nor|cannot|without|n't"
+    r"\b(?:not|never|no|none|nor|cannot|without"
     r"|ne|pas|jamais|aucun|aucune|ni|sans"
-    r"|niet|geen|nooit|zonder)\b",
+    r"|niet|geen|nooit|zonder)\b"
+    r"|n['\u2019]t\b",
     re.IGNORECASE,
 )
 
@@ -89,7 +94,9 @@ def _figures(text: str) -> list[set[str]]:
     Separators are removed and a decimal comma becomes a point; a figure with a
     scale word carries both its expanded and its written value.
     """
-    cleaned = _THOUSANDS_RE.sub("", _CITATION_RE.sub(" ", text))
+    cleaned = _THOUSANDS_RE.sub(
+        lambda m: m.group(1) + re.sub(r"\D", "", m.group(2)), _CITATION_RE.sub(" ", text)
+    )
     figures = []
     for match in _SCALED_RE.finditer(cleaned):
         written = _normalise_figure(match.group(1))
@@ -228,7 +235,7 @@ class VerificationReport:
 
 
 def verify_answer(
-    answer_text: str, sources: list[Retrieved], min_grounding: float = 0.5
+    answer_text: str, sources: list[Retrieved], min_grounding: float | None = None
 ) -> VerificationReport:
     """Check an answer's citations and lexical grounding against its sources.
 
@@ -238,6 +245,7 @@ def verify_answer(
     subtle misreadings. A hallucinated [S#] (out of range) makes the answer not ok.
     The exact refusal message, in any of the answer languages answer_question can
     return it in, is accepted as fully ok since it asserts nothing.
+    `min_grounding` defaults to config.VERIFY_MIN_GROUNDING, the bar the app uses.
     Alternative citation markers ("【S1】") are normalised first, so uncited-sentence
     detection and grounding see the same citations as extract_citations.
 
@@ -246,6 +254,8 @@ def verify_answer(
     score higher than they did when only English function words were dropped.
     `ok` keeps its definition; `strict_ok` additionally requires no uncited claim.
     """
+    if min_grounding is None:
+        min_grounding = config.VERIFY_MIN_GROUNDING
     answer_text = normalize_citations(answer_text)
     if answer_text.strip() in REFUSAL_MESSAGE_SET:
         return VerificationReport(grounding_score=1.0, ok=True, strict_ok=True)

@@ -288,7 +288,7 @@ def refusal_metrics(rows: list[dict]) -> dict:
 
 
 def score_answer(item: dict, answer_text: str, gate_refused: bool,
-                 sources: list[Retrieved], min_grounding: float = 0.5) -> dict:
+                 sources: list[Retrieved], min_grounding: float | None = None) -> dict:
     """Score one answer against its eval item; returns a JSON-serialisable row.
 
     Citation and grounding fields come from rag.verify on the sources the answer
