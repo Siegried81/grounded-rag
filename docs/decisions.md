@@ -60,6 +60,12 @@ Entries stay when they explain what a number means.
   takes ai_act recall from 1.000 to 0.957 (MRR stays 0.891), and on the phrasings it
   moves `other_language` from 3/8 to 5/8 and consistency from 3/8 to 4/8, with the
   other two styles unchanged. Eight questions: a hint, not a result.
+  Paired on the statements questions (exact McNemar, discordant pairs only
+  one way unless stated): source hit at k = 3 goes from 12 to 18 of 20 (0 against 6,
+  p = 0.031); at k = 5 from 15 to 19 (1 against 5, p = 0.22); the figure printed in
+  the passages (`facts_in_top_k`) stays at 11 of 20 at k = 3 and goes from 13 to 14
+  at k = 5 (2 against 3, p = 1.0). So the gain is in which file ranks first, not in
+  whether the figure reaches the model, and no answer run used the re-ranker.
 - **Chunk size on the statements** (rebuilt and scored in the same container):
   500, 700, 900, 1,200 characters give 278, 170, 124, 84 chunks and facts@5 0.55,
   0.60, 0.65, 0.60, as stated.
