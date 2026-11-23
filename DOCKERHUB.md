@@ -10,7 +10,7 @@
 ## Supported tags
 
 - `latest`: the current `main` branch
-- `X.Y.Z` and `X`: released versions (git tags `vX.Y.Z`), the ones to pin for a stable deployment
+- `X.Y.Z` and `X`: built when a git tag `vX.Y.Z` is pushed. No release is tagged yet, so these tags do not exist; until one is, pin a `sha-xxxxxxx` tag
 - `sha-xxxxxxx`: one specific commit
 
 ## What is it?

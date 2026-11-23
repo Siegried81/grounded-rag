@@ -121,3 +121,15 @@ def test_missing_sentence_transformers_is_a_clear_error(monkeypatch):
     monkeypatch.setitem(sys.modules, "sentence_transformers", None)
     with pytest.raises(RuntimeError, match="sentence-transformers"):
         rr.CrossEncoderReranker("m").score("q", ["a"])
+
+
+def test_a_reranker_returning_the_wrong_number_of_scores_is_an_error():
+    """zip(strict=True): a short score list must not silently drop passages."""
+    ranked = [_r(1, 0.9), _r(2, 0.8), _r(3, 0.7)]
+
+    class ShortReranker:
+        def score(self, question, passages):
+            return [1.0, 2.0]
+
+    with pytest.raises(ValueError):
+        rr.rerank("q", ranked, ShortReranker())
