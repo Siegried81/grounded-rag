@@ -68,6 +68,7 @@ _SUMMARY_ROWS = [
     ("errors (excluded)", "n_errors", "d"),
     ("answerable / unanswerable", ("n_answerable", "n_unanswerable"), None),
     ("refusals: gate / model", ("n_gate_refused", "n_model_refused"), None),
+    ("refusals that cite sources", "n_cited_refused", "d"),
     ("refusal precision", "refusal_precision", ".3f"),
     ("refusal recall", "refusal_recall", ".3f"),
     ("refusal F1", "refusal_f1", ".3f"),

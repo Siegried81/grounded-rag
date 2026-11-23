@@ -69,14 +69,15 @@ def test_digits_glued_to_a_letter_are_not_numbers():
 
 @pytest.mark.parametrize("answer", [
     "about 166,000 employees", "about 166 000 employees", "about 166000 employees",
-    "about 166 000 employees", "about 167,000 employees",  # within 1%
+    "about 166 000 employees"
 ])
 def test_numeric_fact_tolerant_formats(answer):
     assert key_fact_present("166,000", answer)
 
 
-def test_numeric_fact_outside_tolerance():
-    assert not key_fact_present("166,000", "about 170,000 employees")  # 2.4% off
+def test_numeric_fact_off_at_the_displayed_precision():
+    assert not key_fact_present("166,000", "about 170,000 employees")
+    assert not key_fact_present("166,000", "about 167,000 employees")  # within 1%, still wrong
     assert not key_fact_present("166,000", "no figure given")
 
 
@@ -215,8 +216,6 @@ def test_help_as_content_is_not_a_refusal(text):
     # unanswerable question it must be scored as a hallucination, not a refusal.
     "Je ne sais pas exactement, mais l'amende est de 35 millions [S1].",
     "I don't know for sure, but the fine is 35 million [S1].",
-    # Even a refusal-worded sentence is a claim once it cites a source.
-    "Les sources fournies ne précisent pas le montant des amendes [S2].",
 ])
 def test_answers_are_not_refusals(text):
     assert not is_refusal(text)

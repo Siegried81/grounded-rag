@@ -44,7 +44,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import config  # noqa: E402
 import rag.llm  # noqa: E402
 from rag.answer import answer_question  # noqa: E402
-from rag.answer_metrics import is_refusal  # noqa: E402
+from rag.answer_metrics import is_cited_refusal, is_refusal  # noqa: E402
 from rag.logging_utils import never_crash_on_console_encoding  # noqa: E402
 from rag.retrieve import retrieve  # noqa: E402
 from rag.stats import format_rate  # noqa: E402
@@ -193,6 +193,16 @@ def refusal_origins(results: list[dict]) -> tuple[int, int]:
     return gate, model
 
 
+def cited_refusals(results: list[dict]) -> int:
+    """Rows where the model declined while still carrying [S#] citations.
+
+    They count as refusals (`rag.answer_metrics.is_cited_refusal`); the count keeps
+    that reading visible next to the gate / model split.
+    """
+    return sum(1 for r in results if not r["refused"] and r["answer"]
+               and not r.get("leak_blocked") and is_cited_refusal(r["answer"]))
+
+
 def _load_resources(corpus: str):
     """Load the store and optional BM25 index exactly as the app does."""
     from rag.lexical import BM25Index
@@ -250,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{category:<24} {format_rate(passed, total)}")
     gate, model = refusal_origins(results)
     print(f"{'refusals: gate / model':<24} {gate}/{model}")
+    print(f"{'refusals citing sources':<24} {cited_refusals(results)}")
     print(f"{'prompt leaks blocked':<24} {sum(r['leak_blocked'] for r in results)}")
     print(f"{'expected answer, refused':<24} {sum(r['over_refused'] for r in results)}")
     print(f"results: {out_path}")
