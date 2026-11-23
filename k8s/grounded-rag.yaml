@@ -56,7 +56,12 @@ spec:
         - name: ingest
           image: siegried/grounded-rag:latest
           imagePullPolicy: IfNotPresent
-          command: ["python", "cli.py", "ingest", "--corpus", "ai_act_sections"]
+          # All three corpora: the UIs offer each of them, and a missing index is an
+          # error at question time.
+          command:
+            - sh
+            - -c
+            - for c in ai_act_sections filings_sections filings_statements; do python cli.py ingest --corpus $c || exit 1; done
           env:
             - name: OLLAMA_URL
               value: "http://rag-ollama:11434"
