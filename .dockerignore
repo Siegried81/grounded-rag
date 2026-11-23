@@ -32,5 +32,8 @@ _build/
 Dockerfile
 docker-compose.yml
 .dockerignore
+# The raw SEC submission (9.5 MB, data/filings/raw/) is provenance only: the
+# index is built from data/filings_sections/, never from this file.
+data/filings/raw/
 # The React UI is built on the host; only web/dist is useful in the image.
 web/node_modules/

@@ -1,0 +1,14 @@
+# Minimal lint, run by CI (`ruff check`). Only rules that catch real mistakes:
+# F: unused imports and undefined names; E9: syntax errors; B905: zip() without
+# strict=; RUF007: zip(x, x[1:]) that pairwise() does without a slice copy.
+target-version = "py312"
+extend-exclude = ["web", "_build"]
+
+[lint]
+select = ["F", "E9", "B905", "RUF007"]
+
+# test_nli.py and test_streaming.py import the fixtures of test_api.py, and
+# pytest then receives them as arguments: ruff reads that as a redefinition.
+[lint.per-file-ignores]
+"tests/test_nli.py" = ["F811"]
+"tests/test_streaming.py" = ["F811"]

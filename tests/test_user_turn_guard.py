@@ -42,7 +42,24 @@ def guard_on(monkeypatch):
 # --- default (guard off): nothing changes ------------------------------------
 
 def test_off_by_default():
-    assert config.USER_TURN_GUARD is False
+    """The code default is off: re-import config with no .env and no env var.
+
+    conftest forces the flag off for every test, so reading config.USER_TURN_GUARD
+    here would prove nothing. Reloading with load_dotenv disabled checks the
+    default written in config.py itself; the second reload restores the module.
+    """
+    import importlib
+
+    import dotenv
+
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.delenv("USER_TURN_GUARD", raising=False)
+            mp.setattr(dotenv, "load_dotenv", lambda *a, **k: False)
+            importlib.reload(config)
+            assert config.USER_TURN_GUARD is False
+    finally:
+        importlib.reload(config)
 
 
 def test_default_prompt_is_unchanged(calls):

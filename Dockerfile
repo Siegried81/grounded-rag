@@ -5,6 +5,8 @@
 #   dependency in requirements.txt (numpy, pypdf...), so no compiler is needed.
 # - requirements.txt is copied and installed BEFORE the source code, so editing
 #   code only rebuilds the last, cheap layer instead of reinstalling packages.
+#   Only runtime packages are in it: pytest, ruff and debugpy are in
+#   requirements-dev.txt, which the image never installs.
 # - The app runs as an unprivileged user: a compromised dependency or a prompt
 #   gone wrong cannot write outside the folders that user owns.
 # - Secrets (.env), the local venv, built indexes, caches and logs are excluded
