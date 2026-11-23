@@ -97,6 +97,22 @@ def test_without_yes_it_only_prints_the_cost(monkeypatch, tmp_path, capsys):
     printed = capsys.readouterr().out
     assert "would score 2 rows x 3 repeats x 3 metrics = 18 metric calls" in printed
     assert "dry run" in printed and not out.exists()
+    # The dry run says which rows it left out, so a count of 2 is not a silent loss.
+    assert "left out, refused (answerable): 1" in printed
+    assert "left out, no contexts recorded (older run): 1" in printed
+
+
+def test_a_file_with_no_scorable_row_stops_and_says_why(monkeypatch, tmp_path):
+    """An older answer run has no `contexts`: say so instead of "would score 0 rows"."""
+    module = _load()
+    src = tmp_path / "old_run.jsonl"
+    old = {"corpus": "a", "id": "q1", "answerable": True, "refused": False, "answer": "A"}
+    src.write_text(json.dumps(old) + chr(10), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["run_ragas_eval.py", "--results", str(src), "--yes"])
+    monkeypatch.setattr(module, "build_scorers", lambda *a: pytest.fail("judge built"))
+    with pytest.raises(SystemExit) as stop:
+        module.main()
+    assert "no contexts recorded" in str(stop.value)
 
 
 def test_with_yes_it_scores_writes_and_summarizes(monkeypatch, tmp_path, capsys):
