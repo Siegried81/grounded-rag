@@ -5,12 +5,14 @@ you can read, or an honest "I don't know".
 
 **Who it is for.** Someone who has to answer questions from a long text they did
 not write (a regulation, an annual report) and wants to check each claim against
-the passage it came from. It runs on two corpora: the EU AI Act (Regulation
-2024/1689, 308 files) and Apple's FY2025 10-K (25 files: the text Items plus
-Item 8, the financial statements).
+the passage it came from. It runs on the EU AI Act (Regulation 2024/1689, 308
+files) and on Apple's FY2025 10-K, which is two corpora: `filings_sections`, the
+text of six Items (6 files), and `filings_statements`, Item 8, the financial
+statements (19 files). You pick the corpus; the app does not route for you.
 
 - AI Act: *Which AI practices are prohibited?* *From what date does this Regulation apply?*
-- Apple 10-K: *What fine did the European Commission impose on Apple under the DMA?* *Why is Apple's dependence on iPhone sales a risk factor?*
+- Apple 10-K, text: *What fine did the European Commission impose on Apple under the DMA?* *Why is Apple's dependence on iPhone sales a risk factor?*
+- Apple 10-K, statements: *What were Apple's total assets at the end of fiscal 2025?* *How much cash did operating activities generate?*
 
 ## What it guarantees, and what it does not
 
@@ -31,12 +33,13 @@ The tool does not replace a legal or financial review.
 | Cites a source that does not exist | Citation validity 1.000 (40 questions) | `[S#]` checked against the retrieved set | None seen |
 | States a wrong figure | `aa-13` caught by the figure check; verify-ok 0.967 | Every figure checked against the cited sources | A figure that is in the source but belongs to another case (`aa-03`) |
 | Instructions hidden in a document | 5/5 passage injections held | Passages fenced as untrusted data | Instructions in the question: red team 18/21 (`leak-02`, `jb-03`, `cite-01`) |
-| Numbers in the financial statements | 12 of 20 answers right (retrieval hit@5 0.750) | Tables flattened to `label: 2025 \| 2024 \| 2023` | 4 wrong refusals and 3 wrong figures on 20 questions |
+| Numbers in the financial statements | Figure printed in the 5 passages for 13 of 16 single-figure questions; answers not re-measured yet | Own corpus, tables cut by row with the statement, columns and group on every chunk | First run, before the fix: 12 of 20 right, 4 wrong refusals, 3 wrong figures; the figure check cannot catch a figure from another line |
 
 The 10-K promise is questions on the text of the annual report, not financial
-analysis. The statements are indexed, but on 20 questions about them 12 answers
-were right, 4 refused although the figure is there and 3 gave a wrong figure
-(another line or the MD&A's rounded number). Check any figure against the filing.
+analysis. The statements are a separate corpus for looking a figure up and reading
+the table it sits in; computing a ratio or a difference from them is not
+something the retrieval supports yet (4 of 20 questions need it, and the operands
+came back together for 2 of them). Check any figure against the filing.
 
 **The two repositories.** grounded-rag is the RAG engine; [route-or-roam](https://github.com/Siegried81/route-or-roam)
 is the test bench that compares a workflow and an agent on top of it.
@@ -165,7 +168,7 @@ HOSTED_EMBED_BASE_URL = "https://openrouter.ai/api/v1"   # any OpenAI-compatible
 HOSTED_EMBED_MODEL = "nvidia/nemotron-3.5-embed-1b:free"
 HOSTED_EMBED_API_KEY = "..."                             # the OpenRouter key
 GROQ_API_KEY = "..."
-AUTO_INGEST = "ai_act_sections,filings_sections"
+AUTO_INGEST = "ai_act_sections,filings_sections,filings_statements"
 ```
 
 `AUTO_INGEST` names the corpora the app indexes itself when the index is missing.
@@ -196,7 +199,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -q
 ```
 
-618 passing and 1 skipped without `faiss-cpu` (619 passing with it), all offline
+632 passing and 1 skipped without `faiss-cpu` (633 passing with it), all offline
 (fake embedder, every HTTP call mocked). `ruff check` runs in CI too. The count
 printed at the end of the run is the current one.
 
@@ -221,7 +224,7 @@ below are kept in [`eval/results/`](eval/results/).
 ## Results
 
 Hybrid retrieval, generation with `openai/gpt-oss-120b` on Groq's free tier, on the
-corpora the repo ships (878 AI Act chunks, 246 10-K chunks). The answer and
+corpora the repo ships (878 AI Act chunks, 155 10-K text chunks, 124 10-K statement chunks). The answer and
 red-team tables are the live run of 14 October 2026, scored with the code of that
 run; verifier changes since then move none of their figures
 ([decisions](docs/decisions.md), 2026-11-08 and 2026-11-22).
@@ -232,24 +235,37 @@ section(s) that answer it)
 | Corpus            | Documents | Questions | Recall@3 |   MRR | hit_rate@3 (95% CI) |
 | ----------------- | --------: | --------: | -------: | ----: | -------------------: |
 | ai_act_sections   |       308 |        23 |    0.957 | 0.754 | 1.000 (0.857-1.000) |
-| filings_sections  |        25 |        25 |    0.900 | 0.800 | 0.920 (0.750-0.978) |
+| filings_sections  |         6 |        25 |    0.900 | 0.833 | 0.920 (0.750-0.978) |
 
 At the `TOP_K = 5` the app runs, the same sets give recall@5 1.000 / MRR 0.754 and
-recall@5 0.980 / MRR 0.818; the table stays at k = 3 because it is the harder
+recall@5 1.000 / MRR 0.851; the table stays at k = 3 because it is the harder
 routing test. MMR takes its relevance from the fused rank since 10 November; before,
 MRR was 0.746 and 0.840 (one question each, so noise-sized). Over four documents
 the AI Act MRR had been 0.884: over 308 files it is a real routing test.
 
-**Financial statements** (Item 8, retrieval only, `eval/filings_item8_answers_eval.jsonl`,
-20 answerable questions: 16 read one figure, 4 need a sum, a ratio or a growth rate):
-hit_rate@1 0.350, @3 0.700 (95% CI 0.481-0.855), @5 0.750 (0.531-0.888), MRR 0.508
-at k = 3. Table lines such as "total assets" carry few distinctive words, so the MD&A
-and the notes often rank above the statement.
-Answers (gpt-oss-120b on Groq, 23 November, `eval/results/answer_eval_item8.jsonl`): key-fact
-recall 0.600 (12/20), 0.750 on the 16 answered; 4 false refusals (net income, total
-assets, operating cash flow, net income change), 3 wrong figures (cash, buybacks,
-capital spending), both unanswerable questions refused. Verify-ok was 1.000: every
-wrong figure was in a cited source, so the check cannot catch this kind of error.
+**Financial statements** (`filings_statements`, 19 files, 124 chunks, retrieval only,
+`eval/filings_statements_answers_eval.jsonl`, 20 answerable questions: 16 read one
+figure, 4 need a sum, a ratio or a growth rate). Hit rate and MRR use the section
+labels; `facts_in_top_k` is stricter, the share of questions whose key figures are
+printed in the retrieved passages (a computed figure is printed nowhere, so the
+ceiling is 0.80 without arithmetic).
+
+| k | hit_rate (95% CI) | MRR | facts_in_top_k (95% CI) | with `RERANKER=cross_encoder`: hit / MRR / facts |
+| -: | ----------------: | ---: | ----------------------: | -----------------------------------------------: |
+| 1 | 0.550 (0.342-0.742) | 0.550 | 0.400 (0.219-0.613) | 0.600 / 0.600 / 0.300 |
+| 3 | 0.600 (0.387-0.781) | 0.575 | 0.550 (0.342-0.742) | 0.900 / 0.717 / 0.550 |
+| 5 | 0.750 (0.531-0.888) | 0.610 | 0.650 (0.433-0.819) | 0.950 / 0.729 / 0.700 |
+
+At k = 5 the figure is in the passages for 13 of the 16 single-figure questions (the
+misses: commercial paper, gross margin in dollars, dividends paid). The first
+version, with the statements inside `filings_sections` and cut as sentences, scored
+hit@5 0.750 but facts_in_top_5 0.500: a source hit was often the file's header chunk,
+which holds no figure; with the six text files alone it is 0.300
+([decisions](docs/decisions.md), 2026-11-23).
+Answers: the 23 November run (`eval/results/answer_eval_item8.jsonl`, gpt-oss-120b on
+Groq) was on that first version: key-fact recall 0.600 (12/20), 4 false refusals, 3
+wrong figures, both unanswerable questions refused, verify-ok 1.000. It has not been
+re-run on `filings_statements`.
 
 **Phrasings** (`scripts/run_phrasing_eval.py`, k = 5, 8 questions in 3 wordings):
 `hit@5` is 8/8 `original`, 7/8 `casual`, 3/8 `other_language`, and consistency

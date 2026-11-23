@@ -31,11 +31,13 @@ docker compose --profile local-llm up -d ollama
 docker compose --profile local-llm exec ollama ollama pull nomic-embed-text
 docker compose --profile tools --profile local-llm run --rm ingest --corpus ai_act_sections
 docker compose --profile tools --profile local-llm run --rm ingest --corpus filings_sections
+docker compose --profile tools --profile local-llm run --rm ingest --corpus filings_statements
 ```
 
 Arguments after `ingest` replace the default `--corpus ai_act_sections`, because
 the service's entrypoint is `python cli.py ingest`. The corpora are
-`ai_act_sections` and `filings_sections`. `data/filings/` only holds the raw SEC
+`ai_act_sections`, `filings_sections` (the narrative Items of the 10-K) and
+`filings_statements` (Item 8, the financial statements). `data/filings/` only holds the raw SEC
 submission as provenance: it is not ingested, and `.dockerignore` keeps its 9.5 MB
 out of the image.
 

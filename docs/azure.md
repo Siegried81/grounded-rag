@@ -63,6 +63,7 @@ Then:
 ```bash
 EMBED_PROVIDER=azure_openai python cli.py ingest --corpus ai_act_sections
 EMBED_PROVIDER=azure_openai python cli.py ingest --corpus filings_sections
+EMBED_PROVIDER=azure_openai python cli.py ingest --corpus filings_statements
 EMBED_PROVIDER=azure_openai VECTOR_INDEX=azure_search LLM_PROVIDER=azure_openai \
   streamlit run app.py
 ```
