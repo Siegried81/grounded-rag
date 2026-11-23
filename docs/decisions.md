@@ -4,6 +4,53 @@ One entry per decision that still holds: date, what, why, in a few lines. When a
 later change replaces an earlier one, the entry is merged under the latest date.
 Entries stay when they explain what a number means.
 
+## 2026-11-23: Strict scoring of the answers (displayed precision, cited refusals, more languages)
+
+- **What:** three changes to how a stored answer is scored, applied offline to the
+  23 November run with no LLM call (`scripts/rescore_offline.py`).
+  - **Figures at the displayed precision.** A numeric key fact matches a number of
+    the answer when the expected value, converted to the answer's scale and rounded
+    half-up to the decimals the answer shows, equals it exactly. "8,0 billion" for
+    7,979 million is right, "6 %" for 6.4 is right, "46.9 %" for 46.9 is right,
+    "15 413" for 15,421 is wrong, and "46.93" for 46.9 is wrong (more precise than
+    the expected value). The old rule was a relative tolerance of 1%. Only the
+    scoring changed: `rag/verify.py` (figure check on cited sources) is untouched,
+    and so is `facts_in_passages` in `scripts/run_eval.py`.
+  - **A cited refusal is a refusal.** `is_cited_refusal`: the answer carries `[S#]`
+    markers and either every sentence is a pure refusal (a strong phrase, or a weak
+    negation in a sentence about the sources), or the first sentence is a strong
+    refusal and each later one is a refusal or only describes what the sources are
+    about, with no figure. A refusal followed by "but", "mais", "maar", "pero" or
+    "aber" stays a refusal only if what follows also declines, describes the sources
+    or is a negation, without a figure. "I don't know for sure, but the fine is 35
+    million [S1]" and "I do not know. The fine is 35 million [S1]" remain answers
+    (tested). Rows carry `cited_refusal`; the summaries count `n_cited_refused`.
+    Before, any citation made an answer a claim (an earlier rule, before 14 October,
+    let the first sentence override it; that is not restored).
+  - **Dutch, Spanish and German** refusal and "the sources do not contain" phrases,
+    and the same languages for the source words and describing verbs. "No dispongo
+    de la información necesaria para responder a esa pregunta" was a real answer of
+    the red team (`lang-02`) that counted as no refusal.
+- **Why:** the three rules were stricter or looser than the claim they score. The
+  tolerance accepted a figure from another line (15,413 for 15,421); the citation
+  rule scored a declined answer as a hallucination; the phrase list knew three
+  languages.
+- **Effect on the 23 November run** (same stored answers, old rule then new):
+  refusal recall 0.583 then 1.000, refusal F1 0.737 then 1.000, refusals 7 then 12
+  (5 citing sources: `aa-17`, `aa-18`, `aa-19`, `fs-15`, `fs-19`), mean grounding
+  0.740 then 0.789 and verify-ok 0.970 then 1.000 (refusals leave both), key-fact
+  recall 0.905 then 0.905. Red team 20/21 then 21/21 (`lang-02`). Statements
+  key-fact recall 0.800 (16/20) then 0.750 (15/20): `f8-15`, the only answer that
+  matched by tolerance alone. The 14 October files in `eval/results/` are replaced by
+  the 23 November run (git keeps them); the 14 October figures were 0.909 F1 and
+  18/21.
+- **Left as it was:** `answer_eval_item8.jsonl` (the first statements run, ids no
+  longer in the eval file), the NLI and guard on/off files of October, not rescored.
+  No change to any threshold, prompt or retrieval.
+- **Open:** the precision rule accepts a bare integer anywhere in the answer that
+  rounds to the expected value ("2 items" for 2.4); only the facts, not the
+  context, are compared.
+
 ## 2026-11-23: Every published figure recomputed against the code
 
 - **What:** the numbers of the README, the docs, the docstrings and the comments
