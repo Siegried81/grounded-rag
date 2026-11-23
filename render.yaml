@@ -2,7 +2,7 @@
 #
 # Render has no Ollama and no persistent disk on the free plan, so the
 # embedder is a hosted OpenAI-compatible endpoint (set the three HOSTED_* values
-# in the dashboard; sync: false keeps them out of this file) and both indexes
+# in the dashboard; sync: false keeps them out of this file) and the three indexes
 # are built at start, before Streamlit comes up. The first start takes a few
 # minutes while the corpora are embedded; later starts repeat it.
 #

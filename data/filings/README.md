@@ -1,13 +1,13 @@
 # Filings corpus
 
-Drop a SEC 10-K here as `.txt` or `.pdf`, then build the index:
+This folder is the provenance of the two 10-K corpora, not a corpus itself: it
+holds the raw SEC submission under `raw/` and ingests nothing (there is no
+`filings` corpus). To use another filing, put its raw submission in `raw/`, cut it
+into Items and Item 8 files in a new `data/<name>/` folder and ingest that:
 
 ```bash
-python cli.py ingest --corpus filings
+python cli.py ingest --corpus <name>
 ```
-
-Only top-level files of this folder are ingested, so `raw/` (see below) is left
-out of the `filings` corpus.
 
 Where to get a filing (all public, free):
 

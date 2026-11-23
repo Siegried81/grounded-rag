@@ -11,9 +11,9 @@ hybrid unless overridden). `--mode dense` measures the dense channel alone.
 Defaults target the `*_sections` corpora (many documents per corpus), whose eval
 file is `eval/<corpus>_eval.jsonl`. Source-level metrics only discriminate when
 a corpus has several documents: a one-file corpus gives a hit rate of 1.0 by
-construction and says nothing about ranking, which is why both shipped corpora
-are split (308 files for the regulation, 25 files for the 10-K) and why
-the single-file `ai_act` corpus was retired. hit_rate@k is a
+construction and says nothing about ranking, which is why the shipped corpora
+are split (308 files for the regulation, 6 for the 10-K text, 19 for its financial
+statements) and why the single-file `ai_act` corpus was retired. hit_rate@k is a
 0/1 outcome per question, so it is printed with a 95% Wilson interval
 (rag/stats.py); recall@k and MRR are not binomial and get none.
 """

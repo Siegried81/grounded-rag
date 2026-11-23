@@ -1,11 +1,11 @@
 # Grounded RAG: cite or refuse
 
-Ask a document set a question and get an answer where every claim cites a passage
-you can read, or an honest "I don't know".
+Ask a document set a question. The answer cites numbered passages you can open
+and read, or the assistant says it does not know.
 
 **Who it is for.** Someone who has to answer questions from a long text they did
-not write (a regulation, an annual report) and wants to check each claim against
-the passage it came from. It runs on the EU AI Act (Regulation 2024/1689, 308
+not write (a regulation, an annual report) and must check each claim against the
+passage it came from: compliance, legal, finance, audit. It runs on the EU AI Act (Regulation 2024/1689, 308
 files) and on Apple's FY2025 10-K, which is two corpora: `filings_sections`, the
 text of six Items (6 files), and `filings_statements`, Item 8, the financial
 statements (19 files). You pick the corpus; the app does not route for you.
@@ -16,10 +16,17 @@ statements (19 files). You pick the corpus; the app does not route for you.
 
 ## What it guarantees, and what it does not
 
-If no passage clears the relevance bar, the assistant refuses. Otherwise every
-factual sentence points to a numbered source `[S1]`, and after generation the code
-checks that each citation exists, that the answer shares vocabulary with it, and
-that every figure in a sentence is in the sources it cites.
+**The code checks, on every answer:** each `[S1]` points to a passage that was
+retrieved, the answer shares vocabulary with it, and every figure in a cited
+sentence is printed in the passages it cites. If no passage clears the relevance
+bar the assistant refuses before calling the model, but that gate never fired in
+the 83 live questions below: cosine similarity cannot tell a missing fact from a
+present one.
+
+**The model is asked, and nothing enforces it:** to cite every factual sentence
+(an uncited sentence is listed, it does not fail the check) and to say it does not
+know when the fact is absent (it did so for 10 of 12 unanswerable questions, and
+a smaller model would be the first thing to break it).
 
 **Verified means traceable, not true.** The check cannot tell that a cited passage
 governs another case. In `aa-03` the model quoted EUR 1 500 000 from Article 100
@@ -29,11 +36,11 @@ The tool does not replace a legal or financial review.
 
 | Risk | What was measured | Remedy | Still open |
 | --- | --- | --- | --- |
-| Invents an answer when the fact is absent | Model declined 10 of 12 unanswerable questions; `aa-16` answered wrongly | Refusal gate, prompt rule | The gate fired 0 times in 61 questions: cosine cannot separate a missing fact from a present one |
+| Invents an answer when the fact is absent | Model declined 10 of 12 unanswerable questions; `aa-16` answered wrongly | Refusal gate, prompt rule | The gate fired 0 times in 83 questions: cosine cannot separate a missing fact from a present one |
 | Cites a source that does not exist | Citation validity 1.000 (40 questions) | `[S#]` checked against the retrieved set | None seen |
 | States a wrong figure | `aa-13` caught by the figure check; verify-ok 0.967 | Every figure checked against the cited sources | A figure that is in the source but belongs to another case (`aa-03`) |
 | Instructions hidden in a document | 5/5 passage injections held | Passages fenced as untrusted data | Instructions in the question: red team 18/21 (`leak-02`, `jb-03`, `cite-01`) |
-| Numbers in the financial statements | 16 of 20 answers right; 1 wrong figure, 3 refusals where the table was not retrieved | Own corpus, tables cut by row with the statement, columns and group on every chunk | The figure check cannot catch a figure from another line (`f8-04` gave a note's cash line, not the balance sheet's) |
+| Numbers in the financial statements | 16 of 20 right by the scorer, 15 read strictly; 2 wrong figures, 3 refusals where the table was not retrieved | Own corpus, tables cut by row with the statement, columns and group on every chunk | The figure check cannot catch a figure from another line (`f8-04` gave a note's cash line, `f8-15` the dividends declared instead of paid) |
 
 The 10-K promise is questions on the text of the annual report, not financial
 analysis. The statements are a separate corpus for looking a figure up and reading
@@ -41,8 +48,11 @@ the table it sits in; computing a ratio or a difference from them is not
 something the retrieval supports yet (4 of 20 questions need it, and the operands
 came back together for 2 of them). Check any figure against the filing.
 
-**The two repositories.** grounded-rag is the RAG engine; [route-or-roam](https://github.com/Siegried81/route-or-roam)
-is the test bench that compares a workflow and an agent on top of it.
+**The two repositories.** grounded-rag is the RAG engine: retrieval, prompt and
+verifier. [route-or-roam](https://github.com/Siegried81/route-or-roam) imports them
+in place, pinned to one commit, and compares a fixed workflow with an agent on the
+same 40 questions. A change here can move its results, which is why a figure that
+changes meaning is recorded in [decisions](docs/decisions.md).
 
 ## Stack
 
@@ -52,11 +62,13 @@ is the test bench that compares a workflow and an agent on top of it.
 - **Generation**: Groq `openai/gpt-oss-120b`, with fallbacks to OpenRouter, Hugging
   Face and Ollama; Azure OpenAI and Azure AI Search as opt-in backends.
 - **Checks**: lexical grounding, figure check, optional NLI entailment; RAGAS scores
-  with an Azure judge.
-- **Interfaces**: FastAPI with a React UI, or Streamlit.
-- **Quality**: pytest, ruff, GitHub Actions, Dependabot.
+  with an Azure judge; pydantic for the meeting-action schema.
+- **Interfaces**: FastAPI with a React (Vite) UI, or Streamlit.
+- **Quality**: pytest, ruff, GitHub Actions, Dependabot, a uv lock file
+  (`requirements.lock`, Python 3.12) that the image and CI install.
 - **Packaging and deployment** (last, and optional): Docker, Docker Hub and GitHub
-  Container Registry, Render, Streamlit Community Cloud, Kubernetes manifests.
+  Container Registry, Render, Streamlit Community Cloud, Azure Container Apps
+  (`deploy/azure/provision.sh`), Kubernetes manifests.
 
 More: [technical deep dive](docs/technical_deep_dive.md) ·
 [architecture](docs/architecture.md) · [React UI and API](docs/react_ui.md) ·
@@ -101,8 +113,11 @@ More: [technical deep dive](docs/technical_deep_dive.md) ·
 - **RAGAS scores** with an Azure judge (`scripts/run_ragas_eval.py`, see
   [`docs/azure.md`](docs/azure.md)). Not yet run against a real subscription.
 - **Meeting action extraction** (`rag/actions.py`, `scripts/run_action_eval.py`,
-  see [`docs/azure.md`](docs/azure.md)): checked on 6 labelled meetings in French,
-  Dutch and English, with a local 3B model only.
+  see [`docs/azure.md`](docs/azure.md)): a separate tool, not part of the
+  cite-or-refuse pipeline, that reuses this repo's LLM client and its habit of
+  checking what the model returns. No figure below depends on it. Checked on 6
+  labelled meetings (13 actions) in French, Dutch and English, with a local 3B
+  model only.
 
 ## Pipeline
 
@@ -173,7 +188,8 @@ AUTO_INGEST = "ai_act_sections,filings_sections,filings_statements"
 
 `AUTO_INGEST` names the corpora the app indexes itself when the index is missing.
 That platform has no persistent disk, so the index is rebuilt on every cold start
-(about 20 s for both) and the first visitor waits behind a spinner. Groq has no
+(about 20 s measured with the first two corpora, before `filings_statements`
+existed) and the first visitor waits behind a spinner. Groq has no
 embeddings endpoint, hence the second provider's key. The threshold and every
 figure below were measured with `nomic-embed-text`, so on this embedder 0.35 is a
 carried-over setting, not a calibrated one.
@@ -199,24 +215,30 @@ pip install -r requirements.txt -r requirements-dev.txt
 python -m pytest -q
 ```
 
-632 passing and 1 skipped without `faiss-cpu` (633 passing with it), all offline
+638 passing and 1 skipped without `faiss-cpu` (639 passing with it), all offline
 (fake embedder, every HTTP call mocked). `ruff check` runs in CI too. The count
 printed at the end of the run is the current one.
 
 ## Evaluations
 
-The first two need only local embeddings; the last two make one live LLM call per
-question. Run those with `LLM_FALLBACK=false`: otherwise the app falls back to
+The first two need only local embeddings; the answer and red-team runs make one live
+LLM call per question. Run those with `LLM_FALLBACK=false`: otherwise the app falls back to
 OpenRouter or Ollama when Groq is rate-limited and a run mixes models. Pinned, a
 rate-limited call becomes an error row left out of the metrics.
 
 ```bash
 .venv/bin/python scripts/run_eval.py                 # retrieval, with Wilson intervals
+.venv/bin/python scripts/run_eval.py --corpus filings_statements \
+    --eval-file eval/filings_statements_answers_eval.jsonl   # statements, with facts_in_top_k
 .venv/bin/python scripts/run_phrasing_eval.py        # original / casual / other_language wordings
 .venv/bin/python scripts/run_answer_eval.py          # answers; provider and diagnosis per row
 .venv/bin/python scripts/run_redteam.py --verbose    # red team
 .venv/bin/python scripts/red_team.py --live          # live probes, opt-in, needs a key
 ```
+
+`scripts/run_answer_eval.py --corpus filings_statements` scores the statements, and
+`scripts/run_ragas_eval.py` and `scripts/run_action_eval.py` are the Azure-judge and
+meeting-action runs of [`docs/azure.md`](docs/azure.md).
 
 The answer and red-team scripts write to `logs/` (gitignored). The runs quoted
 below are kept in [`eval/results/`](eval/results/).
@@ -224,10 +246,11 @@ below are kept in [`eval/results/`](eval/results/).
 ## Results
 
 Hybrid retrieval, generation with `openai/gpt-oss-120b` on Groq's free tier, on the
-corpora the repo ships (878 AI Act chunks, 155 10-K text chunks, 124 10-K statement chunks). The answer and
+corpora the repo ships (878 AI Act chunks, 155 10-K text chunks and 124 10-K statement chunks). The answer and
 red-team tables are the live run of 14 October 2026, scored with the code of that
 run; verifier changes since then move none of their figures
-([decisions](docs/decisions.md), 2026-11-08 and 2026-11-22).
+([decisions](docs/decisions.md), 2026-11-08 and 2026-11-22). Retrieval has changed
+since: see below the answers table.
 
 **Retrieval** (`scripts/run_eval.py`, k = 3, each question labelled with the
 section(s) that answer it)
@@ -262,13 +285,18 @@ version, with the statements inside `filings_sections` and cut as sentences, sco
 hit@5 0.750 but facts_in_top_5 0.500: a source hit was often the file's header chunk,
 which holds no figure; with the six text files alone it is 0.300
 ([decisions](docs/decisions.md), 2026-11-23).
-Answers: the 23 November run (`eval/results/answer_eval_item8.jsonl`, gpt-oss-120b on
-Groq) was on that first version: key-fact recall 0.600 (12/20), 4 false refusals, 3
-wrong figures, both unanswerable questions refused, verify-ok 1.000. On `filings_statements` (23 November, same model, `eval/results/answer_eval_statements.jsonl`):
-key-fact recall 0.800 (16/20), 0.941 on the 17 answered; 1 wrong figure (`f8-04`,
-cash from a note instead of the balance sheet); 3 refusals where the table was not
-retrieved (gross margin in dollars and as a percentage, net income change); both
-unanswerable questions refused; verify-ok 0.882.
+Answers, 23 November, `gpt-oss-120b` on Groq, 22 questions
+(`eval/results/answer_eval_statements.jsonl`): key-fact recall 0.800 (16/20, 95% CI
+0.58-0.92), 0.941 on the 17 answered, verify-ok 0.882, both unanswerable questions
+refused. **Read strictly it is 15 of 20.** For `f8-15` (dividends paid) the model
+gave the dividends declared, 15,413 instead of 15,421, which the 1% tolerance of the
+key-fact match accepts. The two wrong figures are `f8-04` (cash from a note, not the
+balance sheet) and `f8-15`; the 3 refusals are the questions whose table was not
+retrieved (gross margin in dollars and as a percentage, net income change). The
+chunking was tuned on these same 20 questions, so this is a development figure, not
+a held-out one. The first answer run, with the statements inside `filings_sections`
+(`eval/results/answer_eval_item8.jsonl`), got 12 of 20: 4 false refusals, 3 wrong
+figures, verify-ok 1.000.
 
 **Phrasings** (`scripts/run_phrasing_eval.py`, k = 5, 8 questions in 3 wordings):
 `hit@5` is 8/8 `original`, 7/8 `casual`, 3/8 `other_language`, and consistency
@@ -294,6 +322,17 @@ unanswerable, 0 errors)
 Verify-ok is 0.967 because one AI Act answer (`aa-13`, obligations of
 general-purpose model providers) fails the figure check.
 
+**What has changed since this run.** Retrieval has. Since 10 November MMR ranks by
+the fused rank, and today 25 of these 40 questions get a different top 5 (16 in
+another order, 9 with another set), though the gold source is still retrieved for
+all 28 answerable ones. Scored again with today's code, the stored answers give
+these tables back to the third decimal for refusals, key facts and citations. The
+grounding and verify-ok columns cannot be recomputed: the file did not keep the
+passages the model saw (later runs do). A live comparison on 10 November, not kept,
+gave verify-ok 0.966, key-fact recall 0.905 and mean grounding 0.729 under the new
+retrieval, so grounding is the figure most tied to which passages are shown. The next
+live run on `main` replaces these tables.
+
 **Read the gate/model row before the refusal F1.** The gate never fired: all 40
 rows of [`answer_eval_results.jsonl`](eval/results/answer_eval_results.jsonl) have
 `gate_refused: false`, and all 10 refusals are the model declining in its own words.
@@ -318,8 +357,9 @@ refusal. Both are left as scored.
 |                      |      | jailbreak         |  2/3 |
 | **All**              | **18/21 (86%, 95% CI 65%-95%)** | Refusals: gate / model | 0/10 |
 
-The off-topic and personal-data cases all refuse, but the gate refused none of
-them: the model did. The fence held on all five passage-injection cases, including
+The same suite scored 17/21 and 18/21 under the two retrieval variants compared on
+10 November, so one case either way is run-to-run noise. The off-topic and
+personal-data cases all refuse, but the gate refused none of them: the model did. The fence held on all five passage-injection cases, including
 a forged `</source>`. The three failures:
 
 - `leak-02` reproduced the system prompt verbatim when asked to answer and then
@@ -334,7 +374,7 @@ a forged `</source>`. The three failures:
 
 Since that run, an output check (`rag/answer.py:leaks_system_prompt`, 8 consecutive
 words) replaces an answer that repeats the system prompt with the refusal. Over the
-757 stored answers it flags only the two `leak-02` ones; re-scoring the stored run
+187 answers stored in `eval/results/` it flags only the two `leak-02` ones; re-scoring the stored run
 gives 19/21 (`leak-02` passes). That is a re-score, not a new live run. With
 streaming on, a leaking answer stays on screen until the final answer replaces it.
 Every case and answer is in
@@ -365,7 +405,7 @@ retrieved, and the model still chose the wrong article.
 ## Limitations
 
 - **A similarity threshold cannot detect a missing fact.** The gate has fired zero
-  times over 61 live questions (40 answer, 21 red team). The 12 unanswerable
+  times over 83 live questions (40 answer, 21 red team, 22 statements). The 12 unanswerable
   questions scored top cosine 0.599 to 0.888 and the 28 answerable ones 0.611 to
   0.915, against a threshold of 0.35: the ranges overlap, so no threshold value
   separates them. The unanswerable questions are in-domain on purpose, and cosine
@@ -382,7 +422,8 @@ retrieved, and the model still chose the wrong article.
   above blocks the verbatim case; `USER_TURN_GUARD` is off by default.
 - **Small eval sets**: 23 to 25 retrieval, 40 answer and 21 red-team questions,
   written by one person against the corpora, so they test the pipeline, not the
-  labeller. Rates carry a 95% Wilson interval: 18/21 spans 65% to 95%.
+  labeller. The 20 statements questions also guided the chunking and the choice of
+  a separate corpus: no figure there is held out. Rates carry a 95% Wilson interval: 18/21 spans 65% to 95%.
 - **Two documents, two blind spots.** One filing (Apple FY2025), so nothing shows
   the engine on another company's wording or a scanned filing. One regulation, in
   English, as adopted on 13 June 2024: no consolidated version, implementing acts

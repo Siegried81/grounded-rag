@@ -15,7 +15,7 @@
 
 ## What is it?
 
-Retrieval-augmented question answering where every claim cites a passage you can read, or the assistant refuses. Hybrid BM25 + dense retrieval, citation verification, Streamlit and FastAPI UIs.
+Retrieval-augmented question answering where every claim cites a passage you can read, or the assistant refuses. Hybrid BM25 + dense retrieval, citation and figure verification, Streamlit and FastAPI UIs. The corpora are the EU AI Act and Apple's FY2025 10-K (`ai_act_sections`, `filings_sections`, `filings_statements`); ingest each one you need.
 
 Images from this repository:
 
@@ -39,12 +39,13 @@ them at run time with `-e NAME=value` or `--env-file .env` (see `.env.example` i
 
 | Variable | Purpose |
 |---|---|
-| `LLM_PROVIDER` | `groq`, `openrouter`, `huggingface` or `ollama` |
+| `LLM_PROVIDER` | `groq`, `openrouter`, `huggingface`, `azure_openai` or `ollama` |
 | `GROQ_API_KEY` | Groq key (free tier is enough) |
 | `OPENROUTER_API_KEY` | OpenRouter key |
 | `HF_TOKEN` | Hugging Face token; set, it adds Inference Providers to the fallback chain (paid from the account's credits) |
 | `OLLAMA_URL` | Ollama server, e.g. `http://host.docker.internal:11434` |
-| `EMBED_PROVIDER` | embedding backend |
+| `EMBED_PROVIDER` | embedding backend: `ollama`, `hosted`, `azure_openai` or `sentence_transformers` |
+| `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_EMBED_DEPLOYMENT` | Azure OpenAI, see `docs/azure.md` in the repository |
 
 ## Volumes
 

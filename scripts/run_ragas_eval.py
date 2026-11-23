@@ -214,7 +214,13 @@ def main() -> None:
     print(f"would score {len(rows)} rows x {args.repeats} repeats x {len(METRICS)} metrics "
           f"= {len(rows) * args.repeats * len(METRICS)} metric calls "
           f"(each is several LLM requests), judge={args.judge_deployment or 'unset'}")
+    if not rows:
+        reasons = ", ".join(f"{reason}: {n}" for reason, n in sorted(excluded.items()))
+        raise SystemExit(f"Nothing to score ({reasons or 'empty file'}). Run "
+                         "scripts/run_answer_eval.py first: its rows carry the contexts.")
     if not args.yes:
+        for reason, n in sorted(excluded.items()):
+            print(f"  left out, {reason}: {n}")
         print("dry run: add --yes to score")
         return
 

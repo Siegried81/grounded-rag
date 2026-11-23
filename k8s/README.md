@@ -41,7 +41,7 @@ kind load docker-image siegried/grounded-rag:latest --name rag
 
 kubectl create secret generic rag-secrets --from-env-file=../.env
 
-# apply everything at once; the Job builds the index onto the shared rag-index
+# apply everything at once; the Job builds the three indexes onto the shared rag-index
 # volume. The app and api come up alongside it (their health probes don't
 # check the index), so wait for the Job before sending traffic: queries error
 # until the index exists.
@@ -56,8 +56,13 @@ kubectl port-forward svc/rag-app 8501:8501   # http://localhost:8501
 kind delete cluster --name rag
 ```
 
-## Check the manifests without a cluster
+## Check the manifests before applying them
 
 ```bash
 kubectl apply --dry-run=client -f grounded-rag.yaml
 ```
+
+kubectl 1.36 still asks an API server for its resource types, even for a client
+dry run, so this needs a cluster: run it after `kind create cluster --name rag`.
+With none it fails with "connection refused" on `localhost:8080`, which says nothing
+about the manifests.

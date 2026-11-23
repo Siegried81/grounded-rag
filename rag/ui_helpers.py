@@ -98,6 +98,15 @@ EXAMPLE_TRANSLATIONS_FR = {
         "d'Apple ?",
     "How many full-time equivalent employees did Apple have?":
         "Combien d'employés en équivalent temps plein Apple comptait-elle ?",
+    "What were Apple's total net sales in fiscal 2025?":
+        "Quel a été le chiffre d'affaires net total d'Apple pour l'exercice 2025 ?",
+    "What was Apple's total shareholders' equity at September 27, 2025?":
+        "Quel était le total des capitaux propres d'Apple au 27 septembre 2025 ?",
+    "What was Apple's gross margin in fiscal 2025, in dollars?":
+        "Quelle a été la marge brute d'Apple pour l'exercice 2025, en dollars ?",
+    "How much did Apple spend on property, plant and equipment in fiscal 2025?":
+        "Combien Apple a-t-elle dépensé en immobilisations corporelles (terrains, "
+        "installations et équipements) pour l'exercice 2025 ?",
 }
 
 

@@ -7,8 +7,8 @@
 #   code only rebuilds the last, cheap layer instead of reinstalling packages.
 #   It pins every runtime package (and its dependencies) to the versions CI
 #   tests; requirements.txt stays the readable list of what is supported.
-#   pytest, ruff and debugpy are in requirements-dev.txt, which the image never
-#   installs.
+#   pytest, httpx, ruff and debugpy are in requirements-dev.txt, which the image
+#   never installs.
 # - The app runs as an unprivileged user: a compromised dependency or a prompt
 #   gone wrong cannot write outside the folders that user owns.
 # - Secrets (.env), the local venv, built indexes, caches and logs are excluded

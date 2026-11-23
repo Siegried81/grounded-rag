@@ -111,10 +111,10 @@ def test_example_translations_cover_shipped_examples():
     The direction is the reverse of what it was: both corpora and both eval
     files are English now (Regulation (EU) 2024/1689 and the Apple 10-K), so the
     hand-written renderings are what the French interface shows, and nothing is
-    translated for the English one. Each corpus contributes four examples and no
-    question is shared, so the table holds exactly eight.
+    translated for the English one. Each of the three corpora contributes four
+    examples and no question is shared, so the table holds exactly twelve.
     """
-    for name in ("ai_act_sections", "filings_sections"):
+    for name in ("ai_act_sections", "filings_sections", "filings_statements"):
         path = config.ROOT / "eval" / f"{name}_eval.jsonl"
         en = ui.localized_examples(path, "en")
         fr = ui.localized_examples(path, "fr")
@@ -122,4 +122,4 @@ def test_example_translations_cover_shipped_examples():
         assert en == ui.example_questions(path)  # English is the files' own wording
         assert all(q in ui.EXAMPLE_TRANSLATIONS_FR for q in en)
         assert fr == [ui.EXAMPLE_TRANSLATIONS_FR[q] for q in en]
-    assert len(ui.EXAMPLE_TRANSLATIONS_FR) == 8
+    assert len(ui.EXAMPLE_TRANSLATIONS_FR) == 12

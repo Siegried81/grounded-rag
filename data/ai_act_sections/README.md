@@ -55,7 +55,7 @@ output is what the repo ships).
 
 ## Why there is no longer an `ai_act` corpus
 
-`data/ai_act/` used to hold a single document and `data/ai_act_sections/` four
+The `ai_act` corpus used to hold a single document and `ai_act_sections` four
 files split from it at its own `##` headings, the same text twice (measured: 207
 of 207 unique words shared), which made "two corpora" a presentation of one.
 Keeping a whole-regulation copy beside the per-unit split would reproduce exactly

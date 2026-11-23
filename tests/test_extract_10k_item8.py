@@ -8,6 +8,8 @@ table with "$" and ")" alignment cells, and a multi-column segment table.
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from scripts import extract_10k_item8 as ex  # noqa: E402
@@ -57,3 +59,18 @@ def test_line_break_in_a_header_cell_keeps_the_space():
 def test_segment_columns_are_named_on_every_value():
     out = ex.label_columns(["2025", "Americas | Greater China | Total", "Net sales: 178 | 64 | 242"])
     assert out[-1] == "Net sales (2025): Americas 178 | Greater China 64 | Total 242"
+
+
+def test_shipped_statements_are_what_the_script_writes(tmp_path):
+    """Running the extractor on the raw filing reproduces data/filings_statements/ exactly.
+
+    The docs say "rerun it to regenerate them"; this is what keeps that true, and
+    what stops a hand edit of a statement file from going unnoticed.
+    """
+    if not ex.DEFAULT_RAW.exists():
+        pytest.skip("raw SEC submission not present")
+    assert ex.main(["--raw", str(ex.DEFAULT_RAW), "--out", str(tmp_path)]) == 0
+    written = {p.name: p.read_text(encoding="utf-8") for p in tmp_path.glob("*.txt")}
+    shipped = {p.name: p.read_text(encoding="utf-8") for p in ex.DEFAULT_OUT.glob("*.txt")}
+    assert written == shipped
+    assert len(written) == len(ex.SECTIONS) == 19

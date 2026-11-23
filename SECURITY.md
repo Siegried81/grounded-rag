@@ -32,5 +32,6 @@ way, and it will be revoked rather than merely deleted.
 - In scope: a document or question that makes the model follow injected
   instructions, cite a source that was not retrieved, or reveal its system
   prompt. The red-team suite (`scripts/run_redteam.py`) is the reference for what is tested.
-- Keys: `GROQ_API_KEY*`, `OPENROUTER_API_KEY`, `HF_TOKEN`, `HOSTED_EMBED_API_KEY`, `QDRANT_API_KEY`; none is needed with a local
+- Keys: `GROQ_API_KEY*`, `OPENROUTER_API_KEY`, `HF_TOKEN`, `HOSTED_EMBED_API_KEY`, `QDRANT_API_KEY`,
+  `AZURE_OPENAI_API_KEY`, `AZURE_SEARCH_API_KEY` (an admin key); none is needed with a local
   Ollama.
