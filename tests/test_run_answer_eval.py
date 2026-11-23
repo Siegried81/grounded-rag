@@ -87,6 +87,8 @@ def test_end_to_end_scores_and_summary(harness, monkeypatch, capsys):
     assert not answered["refused"] and answered["key_fact_recall"] == 1.0
     assert answered["valid_citations"] == [1] and answered["verify_ok"] is True
     assert answered["retrieved_sources"] == ["a.txt"] and answered["corpus"] == "c"
+    assert answered["contexts"] == [SOURCE_TEXT]  # verbatim, for run_ragas_eval.py
+    assert gate["contexts"] == []
     assert worded_refusal["refused"] and not worded_refusal["gate_refused"]
     assert gate["refused"] and gate["gate_refused"] and gate["answer"] == REFUSAL_MESSAGE
     # Two answer calls: the gate refusal never reached the LLM, and no judge ran.

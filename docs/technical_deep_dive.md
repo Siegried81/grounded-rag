@@ -180,6 +180,21 @@ store's row `i` (see `docs/decisions.md`, 2026-11-04). It reads `QDRANT_URL`,
 Qdrant Cloud), and `qdrant-client` is imported lazily and
 lives in `requirements-optional.txt`.
 
+**Third ANN backend (`rag/azure_search_index.py`, `VECTOR_INDEX=azure_search`,
+off by default).** Same contract again, on an Azure AI Search index: document
+key `i` is row `i`, the vector field is cosine HNSW, and the store scores what
+the index proposes through the same `VectorStore._score_rows` as the FAISS and
+Qdrant paths. It differs in three ways. It talks REST through `requests`, so it
+needs no package. It does not rebuild on every start, since the index is a
+remote paid service: every document carries a fingerprint of the store's
+vectors, and the index is reused only when it holds exactly `n` documents whose
+first and last carry the current fingerprint; anything else is deleted and
+rebuilt. And it waits for the document count to reach `n` after an upload,
+because Azure makes uploaded documents searchable a moment later. Azure only
+accepts `efSearch` in [100, 1000], so `FAISS_EF_SEARCH` is clamped into it. One
+index per store, `<AZURE_SEARCH_INDEX>-<index dir>` with dashes (Azure rejects
+underscores). Setup and costs: [`docs/azure.md`](azure.md).
+
 ### 4.2 Keyword index (`rag/lexical.py`)
 
 A persisted BM25 (`rank_bm25`, Okapi) index over the same chunks, with a shared
@@ -1214,7 +1229,7 @@ PVCs, a Secret) is in `k8s/`, with its own README.
 
 ## 12. Testing strategy
 
-**504 tests, all offline: 503 passing and 1 skipped without `faiss-cpu`, 504 passing with it.** The whole suite runs with:
+**598 tests, all offline: 597 passing and 1 skipped without `faiss-cpu`, 598 passing with it.** The whole suite runs with:
 
 ```bash
 PYTHONPATH=. .venv/bin/python -m pytest -q -p no:cacheprovider
@@ -1285,6 +1300,25 @@ What the suites pin down, beyond per-module unit tests:
   collections (so the second build cannot overwrite the first), `QDRANT_API_KEY`
   reaches the client only when it is set, and a missing package or an
   unreachable server is a clear error.
+- **Azure AI Search backend** (`test_azure_search_index.py`): with an in-memory
+  stand-in for the REST service, the same invariants as Qdrant, plus: a current
+  index is reused without uploading again, an index holding other vectors or a
+  half-finished upload is rebuilt, the build waits until uploads are searchable
+  and gives up with a clear error if they never are, a rejected document fails
+  the build, and the index name and `efSearch` are valid for Azure.
+- **Azure OpenAI** (`test_azure_openai.py`): the v1 URL, bearer key and
+  deployment name, a half-configured resource skipped rather than called, a
+  content-filter refusal or null reply falling through, the deployment in the
+  cache key, batched embeddings put back in input order.
+- **RAGAS script** (`test_run_ragas_eval.py`, fake scorers, `ragas` not needed):
+  which rows are scored and which are left out and counted, the dry-run cost
+  guard, a failed judge call recorded as None and never 0, the run-mean summary.
+- **Action extraction** (`test_actions.py`, `test_run_action_eval.py`, scripted
+  replies): strict schema, owner matching (accents, aliases, two Thomases, an
+  unknown name), every review flag including a date on the wrong weekday and a
+  quote from the wrong line, the transcript fence, the directory never sent to
+  the model; the labelled set checked against its transcripts; pairing and
+  counts; an oracle model scores 13/13 and a failing one counts as nothing found.
 - **Red team: defenses** (`test_red_team.py`, LLM and NLI mocked, `FakeEmbedder`): the
   defenses hold: a fabricated figure and forged citations fail
   `verify_answer`, below-threshold retrieval refuses before any LLM call, and an

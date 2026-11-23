@@ -7,9 +7,10 @@ diffed without special tooling.
 
 `search` is also the seam for an optional approximate index: with
 `VECTOR_INDEX=faiss` an HNSW graph (`rag/ann.py`) proposes the candidate rows,
-and with `VECTOR_INDEX=qdrant` a Qdrant collection (`rag/qdrant_index.py`) does;
-either way this module still computes and orders their scores (see
-`_search_ann` / `_search_qdrant`).
+with `VECTOR_INDEX=qdrant` a Qdrant collection (`rag/qdrant_index.py`) does,
+and with `VECTOR_INDEX=azure_search` an Azure AI Search index
+(`rag/azure_search_index.py`) does; in every case this module still computes
+and orders their scores (see `_score_rows`).
 """
 
 from __future__ import annotations
@@ -43,6 +44,7 @@ class VectorStore:
         self._norms: np.ndarray | None = None  # row norms, computed once per matrix
         self._ann = None  # FAISS graph, built on the first VECTOR_INDEX=faiss search
         self._qdrant = None  # Qdrant index, built on the first VECTOR_INDEX=qdrant search
+        self._azure = None  # Azure AI Search index, built on the first VECTOR_INDEX=azure_search search
 
     def __len__(self) -> int:
         """Return the number of stored chunks."""
@@ -72,6 +74,7 @@ class VectorStore:
         self._norms = None  # the matrix changed
         self._ann = None  # the graph no longer covers every row
         self._qdrant = None  # the Qdrant collection no longer covers every row
+        self._azure = None  # nor does the Azure index
 
     def _row_norms(self) -> np.ndarray:
         """L2 norm of every stored row, computed on first use and kept.
@@ -95,6 +98,8 @@ class VectorStore:
             return self._search_ann(query_vec, top_k)
         if config.VECTOR_INDEX == "qdrant":
             return self._search_qdrant(query_vec, top_k)
+        if config.VECTOR_INDEX == "azure_search":
+            return self._search_azure(query_vec, top_k)
         q = np.asarray(query_vec, dtype=np.float32)
         q_norm = np.linalg.norm(q)
         denom = self._row_norms() * q_norm
@@ -105,7 +110,7 @@ class VectorStore:
         return [Retrieved(self._chunks[i], float(scores[i])) for i in order]
 
     def _search_ann(self, query_vec: list[float], top_k: int) -> list[Retrieved]:
-        """`search` through the FAISS graph: it proposes rows, this method scores them.
+        """`search` through the FAISS graph: it proposes rows, `_score_rows` scores them.
 
         The proposed rows are scored with the same cosine expression as the
         brute-force path, on the same stored vectors, and ordered the same way
@@ -116,20 +121,10 @@ class VectorStore:
 
         if self._ann is None:
             self._ann = FaissIndex(self._vectors)
-        rows = np.asarray(self._ann.candidates(query_vec, top_k), dtype=np.int64)
-        if rows.size == 0:
-            return []
-        q = np.asarray(query_vec, dtype=np.float32)
-        q_norm = np.linalg.norm(q)
-        vecs = self._vectors[rows]
-        denom = self._row_norms()[rows] * q_norm
-        dots = vecs @ q
-        scores = np.divide(dots, denom, out=np.zeros_like(dots), where=denom > 0)
-        order = np.lexsort((rows, -scores))[: min(top_k, len(rows))]
-        return [Retrieved(self._chunks[rows[i]], float(scores[i])) for i in order]
+        return self._score_rows(query_vec, self._ann.candidates(query_vec, top_k), top_k)
 
     def _search_qdrant(self, query_vec: list[float], top_k: int) -> list[Retrieved]:
-        """`search` through a Qdrant collection: it proposes rows, this method scores them.
+        """`search` through a Qdrant collection: it proposes rows, `_score_rows` scores them.
 
         Identical contract to `_search_ann`: Qdrant only proposes candidate
         rows, and the proposed rows are then scored with the same cosine
@@ -149,7 +144,31 @@ class VectorStore:
                 self._vectors,
                 collection=f"{config.QDRANT_COLLECTION}_{self.index_dir.name}",
             )
-        rows = np.asarray(self._qdrant.candidates(query_vec, top_k), dtype=np.int64)
+        return self._score_rows(query_vec, self._qdrant.candidates(query_vec, top_k), top_k)
+
+    def _search_azure(self, query_vec: list[float], top_k: int) -> list[Retrieved]:
+        """`search` through an Azure AI Search index: it proposes rows, `_score_rows` scores them.
+
+        Same contract as `_search_qdrant`, one index per store for the same
+        reason: document key i is row i of THIS store's matrix.
+        """
+        from rag.azure_search_index import AzureSearchIndex, index_name
+
+        if self._azure is None:
+            self._azure = AzureSearchIndex(
+                self._vectors,
+                name=index_name(config.AZURE_SEARCH_INDEX, self.index_dir.name),
+            )
+        return self._score_rows(query_vec, self._azure.candidates(query_vec, top_k), top_k)
+
+    def _score_rows(self, query_vec: list[float], rows, top_k: int) -> list[Retrieved]:
+        """Score the rows an approximate backend proposed, exactly as the brute-force path would.
+
+        Same cosine expression, on the same stored vectors, ordered the same way
+        (score, then row): a backend chooses WHICH rows come back, never their
+        score, so the refusal threshold means the same with every backend.
+        """
+        rows = np.asarray(rows, dtype=np.int64)
         if rows.size == 0:
             return []
         q = np.asarray(query_vec, dtype=np.float32)

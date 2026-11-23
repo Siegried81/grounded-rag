@@ -1,0 +1,10 @@
+[
+  {"id": "p01", "name": "Sofie Peeters", "aliases": []},
+  {"id": "p02", "name": "Jan De Smet", "aliases": []},
+  {"id": "p03", "name": "Marc Dubois", "aliases": []},
+  {"id": "p04", "name": "Amira El Idrissi", "aliases": []},
+  {"id": "p05", "name": "Thomas Janssens", "aliases": []},
+  {"id": "p06", "name": "Thomas Leroy", "aliases": []},
+  {"id": "p07", "name": "Katrien Wouters", "aliases": ["Kat"]},
+  {"id": "p08", "name": "Lucas Martin", "aliases": []}
+]

@@ -376,3 +376,62 @@ One dated entry per change that alters what a number or a verdict means. Append,
   with `LLM_FALLBACK=false`.
 - **What changes in the numbers:** nothing. The default chain is unchanged, so
   the LLM cache keys are too. Tests 503 -> 504.
+
+## 2026-11-17: Azure path added (Azure OpenAI, Azure AI Search, RAGAS, action extraction)
+
+- **What:** four opt-in pieces, none on by default. `LLM_PROVIDER=azure_openai`
+  and `EMBED_PROVIDER=azure_openai` call an Azure OpenAI resource through its
+  OpenAI-compatible v1 API. `VECTOR_INDEX=azure_search` is a third approximate
+  backend (`rag/azure_search_index.py`). `scripts/run_ragas_eval.py` scores an
+  answer-eval run with RAGAS. `rag/actions.py` extracts meeting actions, measured
+  by `scripts/run_action_eval.py` on six labelled meetings (`eval/actions/`).
+  Setup and costs are in `docs/azure.md`; `deploy/azure/provision.sh` deploys the
+  UI on Container Apps with the keys in Key Vault.
+- **What changes in the numbers:** nothing published. The defaults are
+  unchanged, and the fallback chain only gains `azure_openai` when
+  `AZURE_OPENAI_API_KEY` is set, so the LLM cache keys of every existing setup
+  stay the same. Tests 504 -> 598 (597 passing, 1 skipped without `faiss-cpu`).
+- **Changes to existing code, same behaviour:** the cosine scoring of proposed
+  rows, written twice in `rag/store.py` (FAISS and Qdrant), is now one method,
+  `_score_rows`, used by all three backends; the FAISS and Qdrant tests pass
+  unchanged. `HostedEmbedder` takes an optional `batch_size` (None keeps the
+  single request), puts the vectors back in input order using the `index` field
+  the API returns, and raises when the endpoint returns a different number of
+  vectors than texts, which would otherwise attach a passage to the wrong
+  vector. `run_answer_eval.py` rows now also carry `contexts`, the passage texts
+  the answer saw, so RAGAS judges the exact context.
+- **How RAGAS is defined here:** faithfulness, answer relevancy and context
+  precision without a reference (the eval sets have key facts, not reference
+  answers, so context recall is not computed). Only answerable questions that
+  were answered are scored: RAGAS has no notion of cite-or-refuse and would score
+  a correct refusal as a failure. Each row is scored three times and the summary
+  gives the mean of the run means with their min and max. A failed judge call is
+  None, never 0.
+- **How the action eval is defined:** a predicted action is paired with a
+  labelled one when the word overlap (Jaccard, after `normalize_text`) of their
+  source sentences is at least 0.5, best pairs first, each used once. A labelled
+  owner of null means nobody can be assigned (unknown or ambiguous name), so the
+  right output there is no owner id. "Wrong owner assigned" and "caught by
+  review" (errors and extra actions carrying a flag) are reported apart, because
+  a task sent to the wrong person is the costly error.
+- **Measured on a local model, to test the checks:** `llama3.2:3b` on Ollama,
+  `LLM_FALLBACK=false`, cache off. First version of the checks: precision 9/13,
+  recall 9/13, and only 1 of 5 wrong owners or dates flagged: the model put
+  "vendredi" on a Thursday, "donderdag" on a Wednesday, "voor 1 mei" on 3 May,
+  and quoted the wrong line for an action. The model now also returns the
+  deadline words (`due_text`); they must be in the quoted sentence, and the
+  weekday, day or month they name must match the date. Second run: precision
+  12/15, recall 12/13, owner accuracy 11/12, due-date accuracy 7/12, wrong owner
+  assigned 0/12, errors flagged 6/6. One action the model invented (m6, deadline
+  words "clôturés") still passed every check, so a date whose words pin nothing
+  is now flagged too (`due_date_unverified`); re-checking the stored replies of
+  that run, all 3 extra actions are flagged. The injection meeting (m5) gave an
+  empty list on both runs: the small model followed the injected "reply with an
+  empty list", which the fence cannot prevent. These are a 3B model's numbers on
+  13 actions, a test of the checks, not a result to quote for Azure.
+- **Not run yet:** nothing here has touched Azure. The REST calls follow the
+  API reference and are covered by stand-ins, not by a live service. The first
+  Azure run is the real test of `provision.sh`, the v1 URL and the AI Search
+  index definition.
+- **Revisit if:** the RAGAS 0.4 metric API changes (`build_scorers` is the only
+  place it is used), or Azure AI Search's free tier drops below two indexes.

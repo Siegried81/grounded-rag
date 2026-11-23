@@ -57,7 +57,7 @@ def _messages(prompt: str, system: str | None) -> list[dict]:
 
 
 def _openai_style(url: str, key: str, model: str, prompt: str, system: str | None) -> str:
-    """Call an OpenAI-compatible chat endpoint (Groq, OpenRouter, Hugging Face) and return the text.
+    """Call an OpenAI-compatible chat endpoint (Groq, OpenRouter, Hugging Face, Azure) and return the text.
 
     The hosted providers share one wire format, so one helper avoids duplication.
     """
@@ -202,6 +202,21 @@ def _huggingface(prompt: str, system: str | None, call=_openai_style):
     )
 
 
+def _azure_openai(prompt: str, system: str | None, call=_openai_style):
+    """Call an Azure OpenAI deployment through the resource's OpenAI-compatible v1 API.
+
+    The v1 API takes the key as a bearer token and the deployment name as the
+    model, so the shared helpers serve it unchanged. Azure's content filter
+    either rejects a prompt (an HTTP 400, a failure like any other) or returns
+    a null content, which `complete` already treats as an empty reply: both fall
+    through to the next provider and neither is cached.
+    """
+    return call(
+        f"{config.azure_openai_v1_url()}/chat/completions",
+        config.AZURE_OPENAI_API_KEY, config.AZURE_OPENAI_DEPLOYMENT, prompt, system,
+    )
+
+
 def _ollama(prompt: str, system: str | None) -> str:
     """Call the local Ollama chat endpoint (non-streaming) and return the reply text."""
     resp = requests.post(
@@ -255,11 +270,16 @@ def _provider_table() -> dict:
     """Map provider name -> (callable, key); read at call time so config changes apply.
 
     A falsy key means the provider is skipped; Ollama needs none, hence True.
+    Azure needs three settings, not one, so its "key" is falsy until the
+    endpoint and the deployment are set too.
     """
+    azure_ready = bool(config.AZURE_OPENAI_API_KEY and config.AZURE_OPENAI_ENDPOINT
+                       and config.AZURE_OPENAI_DEPLOYMENT)
     return {
         "groq": (_groq, config.GROQ_API_KEYS),
         "openrouter": (_openrouter, config.OPENROUTER_API_KEY),
         "huggingface": (_huggingface, config.HF_TOKEN),
+        "azure_openai": (_azure_openai, azure_ready),
         "ollama": (_ollama, True),
     }
 
@@ -309,6 +329,7 @@ def _stream_table() -> dict:
         "groq": lambda p, s: _groq(p, s, call=_openai_style_stream),
         "openrouter": lambda p, s: _openrouter(p, s, call=_openai_style_stream),
         "huggingface": lambda p, s: _huggingface(p, s, call=_openai_style_stream),
+        "azure_openai": lambda p, s: _azure_openai(p, s, call=_openai_style_stream),
         "ollama": _ollama_stream,
     }
 
@@ -368,14 +389,16 @@ def _cache_path(names: list[str], prompt: str, system: str | None):
 
     The key covers the provider order and every model in it, so changing the
     configured model or provider never serves an answer from another one. The
-    Hugging Face model is added only when that provider is in the order, so
-    keys built before it existed still match.
+    Hugging Face model and the Azure deployment are added only when their
+    provider is in the order, so keys built before they existed still match.
     """
     if not config.LLM_CACHE:
         return None
     models = [config.GROQ_MODEL, config.OPENROUTER_MODEL, config.OLLAMA_LLM_MODEL]
     if "huggingface" in names:
         models.append(config.HF_MODEL)
+    if "azure_openai" in names:
+        models.append(config.AZURE_OPENAI_DEPLOYMENT)
     request = {
         "order": names,
         "models": models,

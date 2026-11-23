@@ -63,10 +63,14 @@ MMR_LAMBDA = float(os.getenv("MMR_LAMBDA", "0.6"))
 # (rag/qdrant_index.py); the store still scores and orders them with its exact
 # cosine, so only recall is approximate. Needs `qdrant-client`
 # (requirements-optional.txt) and a reachable Qdrant at QDRANT_URL.
+# "azure_search" does the same with an Azure AI Search index
+# (rag/azure_search_index.py), over REST, so it needs no extra package, only
+# AZURE_SEARCH_ENDPOINT and an admin key.
 VECTOR_INDEX = os.getenv("VECTOR_INDEX", "numpy").strip().lower()
-if VECTOR_INDEX not in ("numpy", "faiss", "qdrant"):
+if VECTOR_INDEX not in ("numpy", "faiss", "qdrant", "azure_search"):
     raise ValueError(
-        f"VECTOR_INDEX must be 'numpy', 'faiss' or 'qdrant', got {VECTOR_INDEX!r}"
+        "VECTOR_INDEX must be 'numpy', 'faiss', 'qdrant' or 'azure_search', "
+        f"got {VECTOR_INDEX!r}"
     )
 # HNSW search beam: higher is slower and closer to exact.
 FAISS_EF_SEARCH = int(os.getenv("FAISS_EF_SEARCH", "64"))
@@ -77,6 +81,13 @@ QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "grounded_rag")
 # API key for a managed server (Qdrant Cloud). Empty means no key is sent, which
 # is what a local server started without one expects.
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY", "")
+# Azure AI Search backend (VECTOR_INDEX=azure_search). The endpoint is the
+# service URL (https://<service>.search.windows.net). The key must be an ADMIN
+# key: the backend creates the index and uploads the vectors, which a query key
+# cannot do. The index name is a prefix, one index per corpus, like Qdrant's.
+AZURE_SEARCH_ENDPOINT = os.getenv("AZURE_SEARCH_ENDPOINT", "").rstrip("/")
+AZURE_SEARCH_API_KEY = os.getenv("AZURE_SEARCH_API_KEY", "")
+AZURE_SEARCH_INDEX = os.getenv("AZURE_SEARCH_INDEX", "grounded-rag")
 # Optional cross-encoder re-ranker over the candidate pool that passed the gate,
 # before MMR and TOP_K (rag/rerank.py). "none" (default) is the pipeline every
 # published number was measured with; "cross_encoder" re-orders passages, so it
@@ -168,8 +179,39 @@ HOSTED_EMBED_API_KEY = os.getenv("HOSTED_EMBED_API_KEY", "")
 # mix the two rather than silently comparing them.
 ST_EMBED_MODEL = os.getenv("ST_EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 
+# --- Azure OpenAI ------------------------------------------------------------
+# One Azure OpenAI (or Azure AI Foundry) resource serves both the chat model
+# (LLM_PROVIDER=azure_openai) and the embeddings (EMBED_PROVIDER=azure_openai).
+# The endpoint is the resource URL (https://<resource>.openai.azure.com); the
+# client calls its OpenAI-compatible v1 API under /openai/v1, where the "model"
+# field is the DEPLOYMENT name chosen in the portal, not the model family. No
+# deployment has a default: an empty name skips the provider instead of
+# calling a deployment that does not exist.
+AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
+AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY", "")
+AZURE_OPENAI_DEPLOYMENT = os.getenv("AZURE_OPENAI_DEPLOYMENT", "")
+AZURE_OPENAI_EMBED_DEPLOYMENT = os.getenv("AZURE_OPENAI_EMBED_DEPLOYMENT", "")
+# Texts per embeddings request. Azure caps both the inputs and the tokens of
+# one request, so a whole corpus in one call (what the hosted embedder does by
+# default) can be refused; 64 passages of CHUNK_SIZE characters stay far below.
+AZURE_OPENAI_EMBED_BATCH = int(os.getenv("AZURE_OPENAI_EMBED_BATCH", "64"))
+
+
+def azure_openai_v1_url() -> str:
+    """Base URL of the resource's OpenAI-compatible v1 API, or "" when no endpoint is set.
+
+    Accepts the endpoint with or without the /openai/v1 suffix, since the portal
+    shows both forms depending on the page.
+    """
+    if not AZURE_OPENAI_ENDPOINT:
+        return ""
+    base = AZURE_OPENAI_ENDPOINT
+    return base if base.endswith("/openai/v1") else f"{base}/openai/v1"
+
+
 # --- Generation backend ------------------------------------------------------
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")  # groq | openrouter | huggingface | ollama
+# groq | openrouter | huggingface | azure_openai | ollama
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "groq")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
 # Up to five Groq keys (GROQ_API_KEY, GROQ_API_KEY_2 .. _5). The client rotates to
 # the next key when one is rate-limited or fails, which multiplies the free-tier
@@ -217,21 +259,25 @@ LLM_CACHE_DIR = INDEX_DIR / "llm_cache"
 LLM_FALLBACK = os.getenv("LLM_FALLBACK", "true").lower() == "true"
 
 
-def fallback_order(provider: str, fallback: bool, hf_token: str) -> list[str]:
+def fallback_order(provider: str, fallback: bool, hf_token: str,
+                   azure_key: str = "") -> list[str]:
     """Ordered providers rag/llm.py tries; the configured one first.
 
-    Hugging Face joins the chain only when a token is set: the order is part of
-    the LLM cache key, so listing it unconditionally would invalidate every
-    answer already cached for a setup that never uses it. With the default
-    fallback on, the chain is the one the cache was built on.
+    Hugging Face and Azure OpenAI join the chain only when their credential is
+    set: the order is part of the LLM cache key, so listing them unconditionally
+    would invalidate every answer already cached for a setup that never uses
+    them. With the default fallback on, the chain is the one the cache was built
+    on. Azure sits before Ollama: it is paid, but a hosted model answers better
+    than the small local one.
     """
     if not fallback:
         return [provider]
-    return [p for p in [provider, "groq", "openrouter", "huggingface" if hf_token else "", "ollama"]
+    return [p for p in [provider, "groq", "openrouter", "huggingface" if hf_token else "",
+                        "azure_openai" if azure_key else "", "ollama"]
             if p]
 
 
-LLM_FALLBACK_ORDER = fallback_order(LLM_PROVIDER, LLM_FALLBACK, HF_TOKEN)
+LLM_FALLBACK_ORDER = fallback_order(LLM_PROVIDER, LLM_FALLBACK, HF_TOKEN, AZURE_OPENAI_API_KEY)
 
 
 def corpus_dir(corpus: str) -> Path:

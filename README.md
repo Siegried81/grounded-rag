@@ -59,6 +59,12 @@ Docs: [technical deep dive](docs/technical_deep_dive.md) · [architecture](docs/
   `STREAM_ANSWERS=false` turns it off in the UIs.
 - **Language choice**: interface in English or French, answers in English by
   default (or auto / French / Dutch) whatever the language of the sources.
+- **Azure path, opt-in** ([`docs/azure.md`](docs/azure.md)): Azure OpenAI for
+  answers and embeddings, Azure AI Search as a dense backend behind the same
+  refusal gate, RAGAS scores with an Azure judge
+  (`scripts/run_ragas_eval.py`), a Container Apps deployment script with the
+  keys in Key Vault, and a meeting-action extractor (`rag/actions.py`) measured
+  on six labelled meetings in French, Dutch and English. No number below uses it.
 
 ## Pipeline
 
@@ -345,8 +351,8 @@ error row instead, left out of the metrics.
 
 | Role       | Default                              | Fallbacks                       | `.env`           |
 | ---------- | ------------------------------------ | ------------------------------- | ---------------- |
-| Generation | Groq `openai/gpt-oss-120b` (1–5 keys)| OpenRouter, Hugging Face Inference Providers (`HF_TOKEN` set), Ollama `llama3.2:3b`| `LLM_PROVIDER`   |
-| Embeddings | Ollama `nomic-embed-text` (local)    | `sentence_transformers` in-process, or any OpenAI-compatible endpoint | `EMBED_PROVIDER` |
+| Generation | Groq `openai/gpt-oss-120b` (1–5 keys)| OpenRouter, Hugging Face Inference Providers (`HF_TOKEN` set), Azure OpenAI (`AZURE_OPENAI_API_KEY` set), Ollama `llama3.2:3b`| `LLM_PROVIDER`   |
+| Embeddings | Ollama `nomic-embed-text` (local)    | `sentence_transformers` in-process, Azure OpenAI, or any OpenAI-compatible endpoint | `EMBED_PROVIDER` |
 With Ollama for both, everything runs offline and free.
 
 **Hugging Face.** Every optional local model comes from the Hugging Face Hub
@@ -363,7 +369,7 @@ account's credits: without any it answers 402 and the chain moves on.
 
 ## Tests
 
-`python -m pytest -q`: **503 passing** (plus 1 skipped without `faiss-cpu`; 504 with it), the whole suite offline (fake embedder,
+`python -m pytest -q`: **597 passing** (plus 1 skipped without `faiss-cpu`; 598 with it), the whole suite offline (fake embedder,
 all HTTP mocked). The count printed at the end is the current one.
 
 ## Limitations
@@ -412,11 +418,12 @@ all HTTP mocked). The count printed at the end is the current one.
   and red-team tables are each a single run, so they carry no run-to-run variance,
   only the sampling interval. Numbers will move with the model.
 - **Brute-force NumPy search, one-shot generation**: fine at this scale, no multi-hop.
-  An optional FAISS HNSW backend (`VECTOR_INDEX=faiss`, `requirements-optional.txt`)
-  and an optional Qdrant backend (`VECTOR_INDEX=qdrant`) sit behind the same
-  `search` for much larger corpora; both only propose candidate rows that the
-  store still scores with its exact cosine, both are off by default, and no
-  published number uses them.
+  An optional FAISS HNSW backend (`VECTOR_INDEX=faiss`, `requirements-optional.txt`),
+  an optional Qdrant backend (`VECTOR_INDEX=qdrant`) and an optional Azure AI
+  Search backend (`VECTOR_INDEX=azure_search`) sit behind the same `search` for
+  much larger corpora; all three only propose candidate rows that the store
+  still scores with its exact cosine, all are off by default, and no published
+  number uses them.
 
 Details and roadmap: [technical deep dive](docs/technical_deep_dive.md).
 

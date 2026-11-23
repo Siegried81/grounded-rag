@@ -19,3 +19,11 @@ qdrant-client>=1.12
 #   (rag/rerank.py).
 # - NLI_CHECK=true: NLI entailment per cited sentence (rag/nli.py).
 sentence-transformers>=3.0
+
+# scripts/run_ragas_eval.py: RAGAS scores with an Azure OpenAI judge. The 0.4
+# line has the metric API the script uses (ragas.metrics.collections). Its
+# dependencies (scikit-network) did not build on Python 3.14 in November 2026;
+# use Python 3.12, like the Docker image. VECTOR_INDEX=azure_search and the
+# Azure OpenAI provider need nothing here: they call the REST APIs directly.
+ragas>=0.4,<0.5
+openai>=1.0
