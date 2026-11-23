@@ -119,7 +119,7 @@ class NLIChecker:
         if self._encoder is None:
             self._load()
         logits = self._encoder.predict(pairs)
-        return [dict(zip(self._order, _softmax([float(x) for x in row]))) for row in logits]
+        return [dict(zip(self._order, _softmax([float(x) for x in row]), strict=True)) for row in logits]
 
 
 @lru_cache(maxsize=None)

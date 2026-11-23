@@ -89,11 +89,6 @@ def _chunk_file(path: Path, corpus: str, chunker: str):
     return smart_chunk_text(text, source, corpus)
 
 
-def _chunk_corpus(corpus: str, chunker: str):
-    """Chunk every document of a corpus, in `document_paths` order."""
-    return [c for path in document_paths(corpus) for c in _chunk_file(path, corpus, chunker)]
-
-
 def _file_hash(path: Path) -> str:
     """sha256 of a file's bytes: the identity an incremental ingest compares."""
     return hashlib.sha256(path.read_bytes()).hexdigest()

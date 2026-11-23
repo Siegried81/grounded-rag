@@ -2,6 +2,7 @@
 
 import pytest
 
+import config
 from rag.answer import REFUSAL_MESSAGE, REFUSAL_MESSAGES
 from rag.types import Chunk, Retrieved
 from rag.verify import extract_citations, format_report, verify_answer
@@ -315,3 +316,73 @@ def test_a_fabricated_figure_with_a_trailing_citation_still_fails():
 def test_a_citation_alone_on_the_next_line_belongs_to_the_line_above():
     r = verify_answer("The seller must respond within 999 hours.\n[S1]", NUMERIC_SOURCES)
     assert r.unsupported_numbers == ["999"] and not r.ok
+
+
+# --- regressions: negation contractions, year/count, decimals ------------------
+
+@pytest.mark.parametrize("claim", [
+    "The warranty doesn't apply to manufacturing defects",
+    "The warranty doesn\u2019t apply to manufacturing defects",
+    "Providers can't ignore the manufacturing defects",
+])
+def test_a_contraction_counts_as_a_negation(claim):
+    """`n't` sat inside a \b...\b group, so it never matched anything."""
+    r = verify_answer(f"{claim} [S1].", SOURCES)
+    assert r.negation_mismatches
+    assert not r.strict_ok
+
+
+def test_a_contraction_in_the_source_clears_the_mismatch():
+    sources = [_src("The warranty doesn't apply to manufacturing defects in any case.", 1)]
+    r = verify_answer("The warranty doesn't apply to manufacturing defects [S1].", sources)
+    assert r.negation_mismatches == []
+
+
+def test_a_year_followed_by_a_three_digit_count_is_two_figures():
+    """"2024 100" used to merge into 2024100, so neither figure was ever found."""
+    sources = [_src("In 2024 100 providers registered their systems with the authority.", 1)]
+    r = verify_answer("In 2024 100 providers registered their systems with the authority [S1].", sources)
+    assert r.unsupported_numbers == []
+    r = verify_answer("In 2024100 providers registered their systems with the authority [S1].", sources)
+    assert r.unsupported_numbers == ["2024100"]
+
+
+@pytest.mark.parametrize("answer_figure,source_figure", [("0.35", "0.350"), ("0.350", "0.35"), ("0,35", "0.350")])
+def test_a_decimal_with_a_trailing_zero_matches_its_short_spelling(answer_figure, source_figure):
+    """"0.350" was read as 350 thousandths merged into 0350, so 0.35 was unsupported."""
+    sources = [_src(f"The measured ratio of defects was {source_figure} across the whole sample.", 1)]
+    r = verify_answer(f"The measured ratio of defects was {answer_figure} across the whole sample [S1].", sources)
+    assert r.unsupported_numbers == []
+
+
+def test_thousands_after_a_leading_zero_group_still_read_as_decimals_only():
+    sources = [_src("The ratio was 0.350 and the count was 12 000 units in total.", 1)]
+    assert verify_answer("The count was 12000 units in total [S1].", sources).unsupported_numbers == []
+    assert verify_answer("The ratio was 350 units in total [S1].", sources).unsupported_numbers == ["350"]
+
+
+def test_the_default_grounding_bar_is_the_one_in_config(monkeypatch):
+    """verify_answer used to default to 0.5 while the app runs at config.VERIFY_MIN_GROUNDING."""
+    sources = [_src("alpha beta gamma delta epsilon zeta eta theta", 1)]
+    text = "alpha beta gamma delta zzzone zzztwo zzzthree zzzfour [S1]."
+    monkeypatch.setattr(config, "VERIFY_MIN_GROUNDING", 0.30)
+    r = verify_answer(text, sources)
+    assert r.grounding_score == 0.5 and r.ok
+    monkeypatch.setattr(config, "VERIFY_MIN_GROUNDING", 0.60)
+    assert not verify_answer(text, sources).ok
+
+
+def test_numbers_helper_is_the_contract_route_or_roam_imports():
+    """route-or-roam imports rag.verify._numbers to check figures in its own answers.
+
+    It takes a text and returns the set of every spelling of every figure in it.
+    Renaming it, changing the type or dropping the scale-word spellings breaks
+    that consumer.
+    """
+    from rag.verify import _numbers
+
+    assert _numbers("Fines up to EUR 35 000 000, or 7 % of turnover.") == {"35000000", "7"}
+    assert _numbers("Net sales were $416,161 million; 2.50 percent; no figure here") == {
+        "416161", "416161000000", "2.5"}
+    assert _numbers("no figure at all") == set()
+    assert isinstance(_numbers("1"), set)

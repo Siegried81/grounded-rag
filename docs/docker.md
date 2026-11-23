@@ -34,10 +34,10 @@ docker compose --profile tools --profile local-llm run --rm ingest --corpus fili
 ```
 
 Arguments after `ingest` replace the default `--corpus ai_act_sections`, because
-the service's entrypoint is `python cli.py ingest`. There is no longer an
-`ai_act` corpus: it held the same text as `ai_act_sections` (see
-`data/ai_act_sections/README.md`). `data/filings/` is a provenance folder holding
-the raw SEC submission and is not meant to be ingested on its own.
+the service's entrypoint is `python cli.py ingest`. The corpora are
+`ai_act_sections` and `filings_sections`. `data/filings/` only holds the raw SEC
+submission as provenance: it is not ingested, and `.dockerignore` keeps its 9.5 MB
+out of the image.
 
 ## 3. Run the app
 
@@ -112,7 +112,9 @@ Linux too; Docker Desktop provides it natively.
   indexes are runtime state rather than build output. It also excludes the
   private working files git ignores (`_build/` and loose `.txt` notes at the
   root, the requirements lists excepted), so an image built from a local
-  checkout holds the same files as the one CI builds.
+  checkout holds the same files as the one CI builds. It also leaves out
+  `data/filings/raw/` (provenance only, never ingested) and the test tools: the
+  image installs `requirements.txt`, not `requirements-dev.txt`.
 - **Corpora mounted read-only**: `./data` is input. Mounting it `:ro` means neither
   the app nor ingestion can modify the documents answers are grounded on, and
   adding a document needs no rebuild, only a re-ingest.

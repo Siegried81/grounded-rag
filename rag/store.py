@@ -199,7 +199,7 @@ class VectorStore:
         Lets an incremental ingest carry an unchanged file's chunks and vectors
         into the next build without re-embedding them.
         """
-        return list(zip(self._chunks, self._vectors))
+        return list(zip(self._chunks, self._vectors, strict=True))
 
     def save(self) -> None:
         """Write vectors and chunk metadata to `index_dir`.

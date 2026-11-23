@@ -1,4 +1,10 @@
 # Development-only tools: never installed in the published Docker image.
-# debugpy: VS Code debugger, used by docker-compose.debug.yml (and locally:
-#   pip install -r requirements-dev.txt)
-debugpy>=1.8,<2
+# Install next to the runtime requirements:
+#   pip install -r requirements.txt -r requirements-dev.txt
+# pytest and httpx (what FastAPI's TestClient needs): the test suite, run by CI.
+# ruff: the lint step of CI.
+# debugpy: VS Code debugger, used by docker-compose.debug.yml.
+pytest>=9.2.0
+httpx>=0.28.1
+ruff>=0.17.6
+debugpy>=1.8.22,<2

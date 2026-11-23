@@ -53,14 +53,12 @@ but ungrounded text; too high → answerable questions refused). It is one value
 in `config.py`, chosen with `nomic-embed-text` and not calibrated on any other
 embedding model.
 
-**What the gate does not do.** Over 61 live questions, run three times, it has never fired. The
-unanswerable eval questions score 0.599–0.888 top cosine and the answerable ones
-0.611–0.915, so no threshold separates them: cosine measures whether a passage is
-*about* the question, and an unanswerable question about the corpus's own subject
-still is. What refuses in practice is the model following the "answer only from the
-sources" instruction. Both live reports therefore print `refusals: gate / model`
-next to every refusal metric, so a refusal score is never read as evidence about
-the threshold.
+**What the gate does not do.** It has never fired over 61 live questions: no
+threshold separates answerable from unanswerable questions, because cosine measures
+topic, not whether a fact is present. What refuses in practice is the model
+following the "answer only from the sources" instruction, so both live reports print
+`refusals: gate / model` beside every refusal metric (figures in the deep dive,
+§8.2).
 
 **And what verification does not do.** `rag/verify.py` checks that a citation
 exists, points inside the retrieved set, shares vocabulary with the answer, and

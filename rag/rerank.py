@@ -69,9 +69,10 @@ def rerank(question: str, ranked: list, reranker) -> tuple[list, dict[str, float
     """Re-order `ranked` (Retrieved items) by cross-encoder score; also return the scores by id.
 
     Ties keep their incoming order (Python's sort is stable), so equal scores
-    leave the fused ranking as it was. The returned scores, min-max rescaled,
-    are MMR's relevance term in place of the fused or dense one.
+    leave the fused ranking as it was. The returned scores are the raw
+    cross-encoder scores; `retrieve` min-max rescales them into MMR's relevance
+    term in place of the fused or dense one.
     """
     scores = reranker.score(question, [r.chunk.text for r in ranked])
-    by_id = {r.chunk.id: s for r, s in zip(ranked, scores)}
+    by_id = {r.chunk.id: s for r, s in zip(ranked, scores, strict=True)}
     return sorted(ranked, key=lambda r: -by_id[r.chunk.id]), by_id

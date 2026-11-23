@@ -1,5 +1,7 @@
 """Tests for rag.chunk.chunk_text: windowing, overlap, ids and edge cases."""
 
+from itertools import pairwise
+
 import pytest
 
 from rag.chunk import chunk_text
@@ -17,7 +19,7 @@ def test_overlap_shares_text_between_consecutive_chunks():
     """The tail of a chunk must reappear at the head of the next one."""
     text = "".join(chr(97 + i % 26) + str(i % 10) for i in range(200))
     chunks = chunk_text(text, "a.txt", "c", size=60, overlap=15)
-    for prev, nxt in zip(chunks, chunks[1:]):
+    for prev, nxt in pairwise(chunks):
         assert prev.text[-15:] == nxt.text[:15]
 
 

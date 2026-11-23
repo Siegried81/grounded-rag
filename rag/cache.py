@@ -65,6 +65,6 @@ class EmbeddingCache:
             if self.get(model, t) is None and t not in missing:
                 missing.append(t)
         if missing:
-            for t, v in zip(missing, embedder.embed(missing)):
+            for t, v in zip(missing, embedder.embed(missing), strict=True):
                 self.put(model, t, v)
         return [self.get(model, t) for t in texts]
