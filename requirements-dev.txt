@@ -4,7 +4,7 @@
 # pytest and httpx (what FastAPI's TestClient needs): the test suite, run by CI.
 # ruff: the lint step of CI.
 # debugpy: VS Code debugger, used by docker-compose.debug.yml.
-pytest>=8.0
-httpx>=0.27
-ruff>=0.6
-debugpy>=1.8,<2
+pytest>=9.2.0
+httpx>=0.28.1
+ruff>=0.17.6
+debugpy>=1.8.22,<2
